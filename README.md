@@ -10,6 +10,7 @@ A web-based control panel for SLS live streaming servers.
 - Stream management
 - Player and URL management
 - Real-time statistics viewer
+- Per-stream SRT push configuration and toggle
 - Optional authentication
 - Docker-ready deployment
 - English-only interface configuration
@@ -40,6 +41,7 @@ docker run -d \
   -e PASSWORD=change-me \
   -e SLS_API_URL=http://localhost:8789 \
   -e SLS_API_KEY=your_api_key \
+  -e PUSH_INTERNAL_TOKEN=change-me \
   -e SLS_DOMAIN_IP=localhost \
   -e TZ=UTC \
   -e SRT_PUBLISH_PORT=4000 \
@@ -59,6 +61,7 @@ docker run -d \
 | `PASSWORD` | Admin password | - | If login enabled |
 | `SLS_API_URL` | SLS server API endpoint | - | Yes |
 | `SLS_API_KEY` | SLS API key | - | Yes |
+| `PUSH_INTERNAL_TOKEN` | Internal auth token shared with srtla-server push runner | - | Yes (for push relay) |
 | `SLS_DOMAIN_IP` | Domain/IP for stream URLs | `localhost` | Yes |
 | `TZ` | Timezone | `UTC` | No |
 | `SRT_PUBLISH_PORT` | SRT publishing port | `4000` | Yes |

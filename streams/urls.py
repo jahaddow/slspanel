@@ -1,4 +1,5 @@
 from django.urls import path
+
 from . import views
 
 app_name = "streams"
@@ -13,4 +14,7 @@ urlpatterns = [
     path('add-player/', views.add_player, name='add_player'),
     path('delete-stream/<str:publisher_key>/', views.delete_stream, name='delete_stream'),
     path('delete-player/<str:player_key>/', views.delete_player, name='delete_player'),
+    path('push-route/<str:publisher_key>/', views.update_push_route, name='update_push_route'),
+    path('internal/push/routes', views.internal_push_routes, name='internal_push_routes'),
+    path('internal/push/status', views.internal_push_status, name='internal_push_status'),
 ]
