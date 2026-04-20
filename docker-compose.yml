@@ -1,10 +1,9 @@
 services:
   slspanel:
-    image: alexanderwagnerdev/slspanel:latest
+    image: ghcr.io/jahaddow/slspanel:latest
     container_name: slspanel
     restart: unless-stopped
     environment:
-      - LANG=en
       - TZ=UTC
       - SLS_API_URL=http://sls-api-url:8789
       - SLS_API_KEY=yourapikey
@@ -16,6 +15,6 @@ services:
       - SLS_STATS_PORT=8789
       - REQUIRE_LOGIN=True
       - USERNAME=admin
-      - PASSWORD=password
+      - PASSWORD=change-me
     ports:
       - "8000:8000/tcp"

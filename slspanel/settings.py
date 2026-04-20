@@ -26,13 +26,9 @@ SLS_API_KEY = os.getenv("SLS_API_KEY", "")
 
 USE_I18N = True
 USE_L10N = True
-LOCALE_PATHS = [os.path.join(BASE_DIR, "locale")]
-LANGUAGE_CODE = os.getenv("LANG", "en")
-
-LANGUAGES = [
-    ('de', 'Deutsch'),
-    ('en', 'English'),
-]
+LOCALE_PATHS = []
+LANGUAGE_CODE = "en"
+LANGUAGES = [('en', 'English')]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -49,8 +45,6 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     'whitenoise.middleware.WhiteNoiseMiddleware',
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.locale.LocaleMiddleware",
-    "slspanel.middlewares.ForceEnvLanguageMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
