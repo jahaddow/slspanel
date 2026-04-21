@@ -14,8 +14,10 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     initializeAccordionState();
     initializeStats();
+    initializePushStatusPolling();
 });
 const ACTIVE_STREAM_KEY = 'slspanel.activeStreamPublisher';
+const PUSH_STATUS_POLL_MS = 2000;
 async function copyToClipboard(element) {
     const text = element.getAttribute('data-url');
     try {
@@ -257,6 +259,82 @@ function initializeAccordionState() {
             }
         });
     });
+}
+function getPublisherSelectorValue(publisher) {
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(publisher);
+    }
+    return publisher.replace(/"/g, '\\"');
+}
+function updatePushRouteCard(route) {
+    if (!route || !route.publisher) {
+        return;
+    }
+    const selectorValue = getPublisherSelectorValue(route.publisher);
+    const form = document.querySelector(`form[data-push-publisher="${selectorValue}"]`);
+    if (!form) {
+        return;
+    }
+
+    const badgeEl = form.querySelector('[data-push-runner-badge]');
+    if (badgeEl) {
+        const nextText = `Runner: ${route.runner_state || 'unknown'}`;
+        if (badgeEl.textContent.trim() !== nextText) {
+            badgeEl.textContent = nextText;
+        }
+        badgeEl.className = `badge text-bg-${route.runner_badge || 'warning'}`;
+    }
+
+    const errEl = form.querySelector('[data-push-last-error]');
+    if (errEl) {
+        const errorText = (route.last_error || '').trim();
+        if (errorText) {
+            if (errEl.textContent !== errorText) {
+                errEl.textContent = errorText;
+            }
+            errEl.classList.remove('d-none');
+        } else {
+            errEl.textContent = '';
+            errEl.classList.add('d-none');
+        }
+    }
+
+    const toggleBtn = form.querySelector('[data-push-toggle-btn]');
+    if (toggleBtn) {
+        const enabled = !!route.enabled;
+        const nextLabel = enabled ? 'Disable push' : 'Enable push';
+        if (toggleBtn.textContent.trim() !== nextLabel) {
+            toggleBtn.textContent = nextLabel;
+        }
+        toggleBtn.classList.remove('btn-warning', 'btn-primary');
+        toggleBtn.classList.add(enabled ? 'btn-warning' : 'btn-primary');
+    }
+}
+function pollPushRouteStatus() {
+    fetch('/api/push/routes-status/')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data || data.status !== 'success' || !Array.isArray(data.routes)) {
+                return;
+            }
+            data.routes.forEach(route => updatePushRouteCard(route));
+        })
+        .catch(() => {
+            // Keep the last rendered state and retry on the next poll.
+        });
+}
+function initializePushStatusPolling() {
+    const forms = document.querySelectorAll('form[data-push-publisher]');
+    if (forms.length === 0) {
+        return;
+    }
+    pollPushRouteStatus();
+    setInterval(pollPushRouteStatus, PUSH_STATUS_POLL_MS);
 }
 function formatUptime(seconds) {
     if (!seconds) return '00:00:00';

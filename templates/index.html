@@ -51,7 +51,7 @@
                 <span class="copy-feedback"></span><br><br>
 
                 <h5>{% trans 'Push Relay' %}</h5>
-                <form method="post" action="{% url 'streams:update_push_route' stream.publisher %}" class="mb-3 stream-action-form">
+                <form method="post" action="{% url 'streams:update_push_route' stream.publisher %}" class="mb-3 stream-action-form" data-push-publisher="{{ stream.publisher }}">
                     {% csrf_token %}
                     <label for="push-destination-{{ forloop.counter }}" class="form-label fw-bold">SRT destination URL</label>
                     <input id="push-destination-{{ forloop.counter }}" type="text" class="form-control"
@@ -59,14 +59,12 @@
                            placeholder="srt://destination-host:port?mode=caller">
                     <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
                         <button type="submit" name="action" value="save" class="btn btn-sm btn-outline-light">Save destination</button>
-                        <button type="submit" name="action" value="toggle" class="btn btn-sm {% if stream.push.enabled %}btn-warning{% else %}btn-primary{% endif %}">
+                        <button type="submit" name="action" value="toggle" class="btn btn-sm {% if stream.push.enabled %}btn-warning{% else %}btn-primary{% endif %}" data-push-toggle-btn>
                             {% if stream.push.enabled %}Disable push{% else %}Enable push{% endif %}
                         </button>
-                        <span class="badge text-bg-{{ stream.push.runner_badge }}">Runner: {{ stream.push.runner_state }}</span>
+                        <span class="badge text-bg-{{ stream.push.runner_badge }}" data-push-runner-badge>Runner: {{ stream.push.runner_state }}</span>
                     </div>
-                    {% if stream.push.last_error %}
-                    <div class="alert alert-danger mt-2 mb-0 py-1 px-2">{{ stream.push.last_error }}</div>
-                    {% endif %}
+                    <div class="alert alert-danger mt-2 mb-0 py-1 px-2{% if not stream.push.last_error %} d-none{% endif %}" data-push-last-error>{{ stream.push.last_error }}</div>
                 </form>
 
                 <h6>Companion Remote Control (this stream only)</h6>

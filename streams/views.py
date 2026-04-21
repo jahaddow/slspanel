@@ -229,6 +229,24 @@ def streams_status_json(request):
 
 
 @conditional_login_required
+def api_push_routes_status(request):
+    if request.method != 'GET':
+        return HttpResponseBadRequest('GET required')
+
+    routes = []
+    for route in PushRoute.objects.all():
+        routes.append({
+            "publisher": route.publisher,
+            "enabled": bool(route.enabled),
+            "runner_state": route.runner_state,
+            "runner_badge": push_state_badge(route.runner_state),
+            "last_error": route.last_error,
+        })
+
+    return JsonResponse({"status": "success", "routes": routes})
+
+
+@conditional_login_required
 def sls_stats(request, player_key):
     try:
         url = f"http://{settings.SLS_STATS_DOMAIN_IP}:{settings.SLS_STATS_PORT}/stats/{player_key}"
