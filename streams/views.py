@@ -5,6 +5,7 @@ import secrets
 import requests
 from django.conf import settings
 from django.contrib.auth import authenticate, login
+from django.core.cache import cache
 from django.http import HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -27,15 +28,70 @@ def conditional_login_required(view_func):
     return _wrapped_view
 
 
+def get_client_ip(request):
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', 'unknown')
+
+
+def _throttle_cache_keys(ip, username):
+    key_base = f"login-throttle:{ip}:{(username or '').strip().lower() or '_'}"
+    return f"{key_base}:attempts", f"{key_base}:lock"
+
+
+def get_lockout_remaining(ip, username):
+    if not settings.SLSPANEL_ENABLE_LOGIN_THROTTLE:
+        return 0
+
+    _attempt_key, lock_key = _throttle_cache_keys(ip, username)
+    lock_until = cache.get(lock_key)
+    if lock_until is None:
+        return 0
+
+    remaining = int(lock_until - timezone.now().timestamp())
+    return max(0, remaining)
+
+
+def register_login_failure(ip, username):
+    if not settings.SLSPANEL_ENABLE_LOGIN_THROTTLE:
+        return
+
+    attempt_key, lock_key = _throttle_cache_keys(ip, username)
+    attempts = cache.get(attempt_key, 0) + 1
+    cache.set(attempt_key, attempts, timeout=settings.SLSPANEL_LOGIN_THROTTLE_WINDOW_SECONDS)
+
+    if attempts >= settings.SLSPANEL_LOGIN_THROTTLE_MAX_ATTEMPTS:
+        lock_until = int(timezone.now().timestamp()) + settings.SLSPANEL_LOGIN_LOCKOUT_SECONDS
+        cache.set(lock_key, lock_until, timeout=settings.SLSPANEL_LOGIN_LOCKOUT_SECONDS)
+        cache.delete(attempt_key)
+
+
+def reset_login_throttle(ip, username):
+    if not settings.SLSPANEL_ENABLE_LOGIN_THROTTLE:
+        return
+    attempt_key, lock_key = _throttle_cache_keys(ip, username)
+    cache.delete_many([attempt_key, lock_key])
+
+
 def login_view(request):
     error = None
     if request.method == 'POST':
-        username = request.POST.get('username')
+        username = (request.POST.get('username') or '').strip()
         password = request.POST.get('password')
+        client_ip = get_client_ip(request)
+        remaining = get_lockout_remaining(client_ip, username)
+        if remaining > 0:
+            minutes = max(1, (remaining + 59) // 60)
+            error = _("Too many login attempts. Try again in %(minutes)s minute(s).") % {"minutes": minutes}
+            return render(request, 'login.html', {'error': error})
+
         user = authenticate(request, username=username, password=password)
         if user is not None:
+            reset_login_throttle(client_ip, username)
             login(request, user)
             return redirect('streams:index')
+        register_login_failure(client_ip, username)
         error = _("Invalid credentials")
     return render(request, 'login.html', {'error': error})
 

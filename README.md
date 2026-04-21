@@ -10,9 +10,11 @@ A web-based control panel for SLS live streaming servers.
 - Stream management
 - Player and URL management
 - Real-time statistics viewer
+- OPN-branded login and dashboard UI
 - Supports both single-publisher and multi-publisher SLS stats payloads
 - Per-stream push configuration and toggle (`srt://`, `rtmp://`, `rtmps://`)
 - Optional authentication
+- Login throttling and security-header hardening controls
 - Docker-ready deployment
 - English-only interface configuration
 
@@ -62,6 +64,14 @@ docker run -d \
 | `REQUIRE_LOGIN` | Enable authentication (`True`/`False`) | `False` | No |
 | `USERNAME` | Admin username | `admin` | If login enabled |
 | `PASSWORD` | Admin password | - | If login enabled |
+| `SLSPANEL_ALLOWED_HOSTS` | Comma-separated host allowlist | `localhost,127.0.0.1,<SLS_DOMAIN_IP>,<SLS_STATS_DOMAIN_IP>` | No |
+| `SLSPANEL_CSRF_TRUSTED_ORIGINS` | Comma-separated CSRF trusted origins (`http(s)://host`) | empty | No |
+| `SLSPANEL_SECURE_COOKIES` | Set secure cookie flags (enable when behind HTTPS proxy) | `False` | No |
+| `SLSPANEL_TRUST_PROXY_SSL_HEADER` | Trust `X-Forwarded-Proto` for secure request detection | `False` | No |
+| `SLSPANEL_ENABLE_LOGIN_THROTTLE` | Enable login attempt throttling | `True` | No |
+| `SLSPANEL_LOGIN_THROTTLE_WINDOW_SECONDS` | Failed-attempt counting window | `300` | No |
+| `SLSPANEL_LOGIN_THROTTLE_MAX_ATTEMPTS` | Max failed attempts before lockout | `6` | No |
+| `SLSPANEL_LOGIN_LOCKOUT_SECONDS` | Lockout duration after threshold | `900` | No |
 | `SLS_API_URL` | SLS server API endpoint | - | Yes |
 | `SLS_API_KEY` | SLS API key | - | Yes |
 | `PUSH_INTERNAL_TOKEN` | Internal auth token shared with srtla-server push runner | - | Yes (for push relay) |
@@ -98,3 +108,4 @@ SLSPanel can issue per-stream control tokens for push relay control:
 
 Each token is scoped to a single publisher stream.
 For browser testing, `enable`/`disable` also accept `GET` with `?token=...`.
+Bearer header authentication is safer than query-token links and should be preferred for production tooling.

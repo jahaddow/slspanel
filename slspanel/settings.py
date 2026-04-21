@@ -7,8 +7,6 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
 
 DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ['true', '1', 'yes']
 
-ALLOWED_HOSTS = ["*"]
-
 REQUIRE_LOGIN = os.getenv('REQUIRE_LOGIN', 'False').lower() in ['true', '1', 'yes']
 
 USERNAME = os.getenv('USERNAME', 'admin')
@@ -25,6 +23,39 @@ SLS_API_URL = os.getenv("SLS_API_URL", "http://localhost:8789")
 SLS_API_KEY = os.getenv("SLS_API_KEY", "")
 PUSH_INTERNAL_TOKEN = os.getenv("PUSH_INTERNAL_TOKEN", "")
 SLSPANEL_DB_PATH = os.getenv("SLSPANEL_DB_PATH", "/app/data/db.sqlite3")
+
+
+def _env_csv(name, default):
+    raw = os.getenv(name, default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+SLSPANEL_ALLOWED_HOSTS = _env_csv(
+    "SLSPANEL_ALLOWED_HOSTS",
+    f"localhost,127.0.0.1,{SLS_DOMAIN_IP},{SLS_STATS_DOMAIN_IP}",
+)
+ALLOWED_HOSTS = list(dict.fromkeys(SLSPANEL_ALLOWED_HOSTS))
+
+CSRF_TRUSTED_ORIGINS = _env_csv("SLSPANEL_CSRF_TRUSTED_ORIGINS", "")
+
+SLSPANEL_SECURE_COOKIES = os.getenv("SLSPANEL_SECURE_COOKIES", "False").lower() in ['true', '1', 'yes']
+SESSION_COOKIE_SECURE = SLSPANEL_SECURE_COOKIES
+CSRF_COOKIE_SECURE = SLSPANEL_SECURE_COOKIES
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = os.getenv("SLSPANEL_SESSION_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE = os.getenv("SLSPANEL_CSRF_COOKIE_SAMESITE", "Lax")
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = os.getenv("SLSPANEL_REFERRER_POLICY", "same-origin")
+X_FRAME_OPTIONS = os.getenv("SLSPANEL_X_FRAME_OPTIONS", "DENY")
+SECURE_PROXY_SSL_HEADER = None
+if os.getenv("SLSPANEL_TRUST_PROXY_SSL_HEADER", "False").lower() in ['true', '1', 'yes']:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+SLSPANEL_ENABLE_LOGIN_THROTTLE = os.getenv("SLSPANEL_ENABLE_LOGIN_THROTTLE", "True").lower() in ['true', '1', 'yes']
+SLSPANEL_LOGIN_THROTTLE_WINDOW_SECONDS = int(os.getenv("SLSPANEL_LOGIN_THROTTLE_WINDOW_SECONDS", "300"))
+SLSPANEL_LOGIN_THROTTLE_MAX_ATTEMPTS = int(os.getenv("SLSPANEL_LOGIN_THROTTLE_MAX_ATTEMPTS", "6"))
+SLSPANEL_LOGIN_LOCKOUT_SECONDS = int(os.getenv("SLSPANEL_LOGIN_LOCKOUT_SECONDS", "900"))
 
 USE_I18N = True
 USE_L10N = True

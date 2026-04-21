@@ -3,30 +3,28 @@ function generateKey(prefix, bytes) {
     window.crypto.getRandomValues(arr);
     return prefix + Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 }
-document.addEventListener('DOMContentLoaded', function(){
-    const publisherInput = document.getElementById('publisher');
-    const playerInput = document.getElementById('player');
-    if (publisherInput && !publisherInput.value) {
-        publisherInput.value = generateKey('live_', 16);
-    }
-    if (playerInput && !playerInput.value) {
-        playerInput.value = generateKey('play_', 16);
-    }
-    initializeAccordionState();
-    initializeStats();
-    initializePushStatusPolling();
-});
+
 const ACTIVE_STREAM_KEY = 'slspanel.activeStreamPublisher';
 const PUSH_STATUS_POLL_MS = 2000;
+const STATS_POLL_MS = 2000;
+
+function getPublisherSelectorValue(publisher) {
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(publisher);
+    }
+    return publisher.replace(/"/g, '\\"');
+}
+
 async function copyToClipboard(element) {
     const text = element.getAttribute('data-url');
     try {
         await navigator.clipboard.writeText(text);
         showCopyFeedback(element);
-    } catch (err) {
+    } catch (_err) {
         copyToClipboardFallback(text, element);
     }
 }
+
 function copyToClipboardFallback(text, element) {
     const textArea = document.createElement('textarea');
     textArea.value = text;
@@ -41,15 +39,16 @@ function copyToClipboardFallback(text, element) {
         } else {
             showCopyError(element);
         }
-    } catch (err) {
+    } catch (_err) {
         showCopyError(element);
     } finally {
         document.body.removeChild(textArea);
     }
 }
+
 function showCopyFeedback(element) {
     const feedback = element.nextElementSibling;
-    if(feedback) {
+    if (feedback) {
         feedback.textContent = window.translations.copiedText;
         feedback.classList.add('visible');
         setTimeout(() => {
@@ -58,9 +57,10 @@ function showCopyFeedback(element) {
         }, 2000);
     }
 }
+
 function showCopyError(element) {
     const feedback = element.nextElementSibling;
-    if(feedback) {
+    if (feedback) {
         feedback.textContent = window.translations.copyError;
         feedback.classList.add('visible', 'text-danger');
         setTimeout(() => {
@@ -69,26 +69,40 @@ function showCopyError(element) {
         }, 2000);
     }
 }
-function initializeStats() {
-    const statsContainers = document.querySelectorAll('[id^="stats-"]');
-    if (statsContainers.length === 0) {
-        return;
+
+function numericValue(value) {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
     }
-    statsContainers.forEach(container => {
-        const playerKey = container.dataset.playerKey;
-        if (playerKey) {
-            loadStats(playerKey);
-        }
-    });
-    setInterval(() => {
-        statsContainers.forEach(container => {
-            const playerKey = container.dataset.playerKey;
-            if (playerKey) {
-                loadStats(playerKey);
-            }
-        });
-    }, 1000);
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
 }
+
+function scoreMetrics(metrics) {
+    if (!metrics || typeof metrics !== 'object') {
+        return 0;
+    }
+    return (
+        numericValue(metrics.mbps_recv_rate) * 1000000 +
+        numericValue(metrics.bitrate) * 1000 +
+        numericValue(metrics.uptime)
+    );
+}
+
+function hasUsableStats(metrics) {
+    if (!metrics || typeof metrics !== 'object') {
+        return false;
+    }
+    return (
+        numericValue(metrics.bitrate) > 0 ||
+        numericValue(metrics.mbps_recv_rate) > 0 ||
+        numericValue(metrics.uptime) > 0
+    );
+}
+
 function pickActivePublisherMetrics(data) {
     if (!data || typeof data !== 'object') {
         return null;
@@ -107,43 +121,24 @@ function pickActivePublisherMetrics(data) {
     }
     return null;
 }
-function numericValue(value) {
-    if (typeof value === 'number') {
-        return Number.isFinite(value) ? value : 0;
-    }
-    if (typeof value === 'string' && value.trim() !== '') {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) ? parsed : 0;
-    }
-    return 0;
+
+function formatUptime(seconds) {
+    if (!seconds) return '00:00:00';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    return days > 0 ? `${days}d ${time}` : time;
 }
-function scoreMetrics(metrics) {
-    if (!metrics || typeof metrics !== 'object') {
-        return 0;
-    }
-    return (
-        numericValue(metrics.mbps_recv_rate) * 1000000 +
-        numericValue(metrics.bitrate) * 1000 +
-        numericValue(metrics.uptime)
-    );
-}
-function hasUsableStats(metrics) {
-    if (!metrics || typeof metrics !== 'object') {
-        return false;
-    }
-    return (
-        numericValue(metrics.bitrate) > 0 ||
-        numericValue(metrics.mbps_recv_rate) > 0 ||
-        numericValue(metrics.uptime) > 0
-    );
-}
+
 function loadStats(playerKey) {
     const statsContainer = document.getElementById(`stats-${playerKey}`);
     if (!statsContainer) {
         return;
     }
-    const url = `/sls-stats/${playerKey}/`;
-    fetch(url)
+
+    fetch(`/sls-stats/${playerKey}/`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -155,12 +150,13 @@ function loadStats(playerKey) {
                 statsContainer.innerHTML = `<p class="text-danger">${data.error}</p>`;
                 return;
             }
+
             const publisher = pickActivePublisherMetrics(data);
             if (!publisher) {
-                const translations = window.translations || {};
-                statsContainer.innerHTML = `<p class="text-muted"><em>${translations.statsNotAvailable}</em></p>`;
+                statsContainer.innerHTML = `<p class="opn-muted"><em>${window.translations.statsNotAvailable}</em></p>`;
                 return;
             }
+
             const bitrate = numericValue(publisher.bitrate);
             const buffer = numericValue(publisher.buffer);
             const droppedPkts = numericValue(publisher.dropped_pkts);
@@ -169,59 +165,73 @@ function loadStats(playerKey) {
             const uptime = formatUptime(numericValue(publisher.uptime));
             const status = data.status || 'unknown';
             const statusClass = status === 'ok' ? 'text-success' : 'text-warning';
-            const translations = window.translations || {};
             statsContainer.dataset.loaded = '1';
             statsContainer.innerHTML = `
                 <div class="mt-2 p-2 bg-dark bg-opacity-50 rounded">
-                    <h6 class="mb-2">${translations.streamStatistics}</h6>
+                    <h6 class="mb-2">${window.translations.streamStatistics}</h6>
                     <div class="row g-2">
-                        <div class="col-md-4 col-6">
-                            <p>${translations.bitrate}:</p>
-                            <strong>${bitrate} kbps</strong>
-                        </div>
-                        <div class="col-md-4 col-6">
-                            <p>${translations.latency}:</p>
-                            <strong>${latency} ms</strong>
-                        </div>
-                        <div class="col-md-4 col-6">
-                            <p>${translations.rtt}:</p>
-                            <strong>${rtt} ms</strong>
-                        </div>
-                        <div class="col-md-4 col-6">
-                            <p>${translations.buffer}:</p>
-                            <strong>${buffer} ms</strong>
-                        </div>
-                        <div class="col-md-4 col-6">
-                            <p>${translations.droppedPackets}:</p>
-                            <strong class="${droppedPkts > 0 ? 'text-warning' : ''}">${droppedPkts}</strong>
-                        </div>
-                        <div class="col-md-4 col-6">
-                            <p>${translations.uptime}:</p>
-                            <strong>${uptime}</strong>
-                        </div>
-                        <div class="col-12 mt-2">
-                            <p>${translations.status}:</p>
-                            <span class="${statusClass} fw-bold"> ${status.toUpperCase()}</span>
-                        </div>
+                        <div class="col-md-4 col-6"><p>${window.translations.bitrate}:</p><strong>${bitrate} kbps</strong></div>
+                        <div class="col-md-4 col-6"><p>${window.translations.latency}:</p><strong>${latency} ms</strong></div>
+                        <div class="col-md-4 col-6"><p>${window.translations.rtt}:</p><strong>${rtt} ms</strong></div>
+                        <div class="col-md-4 col-6"><p>${window.translations.buffer}:</p><strong>${buffer} ms</strong></div>
+                        <div class="col-md-4 col-6"><p>${window.translations.droppedPackets}:</p><strong class="${droppedPkts > 0 ? 'text-warning' : ''}">${droppedPkts}</strong></div>
+                        <div class="col-md-4 col-6"><p>${window.translations.uptime}:</p><strong>${uptime}</strong></div>
+                        <div class="col-12 mt-2"><p>${window.translations.status}:</p><span class="${statusClass} fw-bold">${status.toUpperCase()}</span></div>
                     </div>
                 </div>
             `;
         })
-        .catch(error => {
+        .catch(() => {
             if (!statsContainer.dataset.loaded) {
                 statsContainer.innerHTML = `<p><em>${window.translations.statsNotAvailable}</em></p>`;
             }
         });
 }
+
+function visibleStatsContainers() {
+    return document.querySelectorAll('.accordion-collapse.show [id^="stats-"]');
+}
+
+function loadVisibleStats() {
+    visibleStatsContainers().forEach(container => {
+        const playerKey = container.dataset.playerKey;
+        if (playerKey) {
+            loadStats(playerKey);
+        }
+    });
+}
+
+function initializeStats() {
+    const statsContainers = document.querySelectorAll('[id^="stats-"]');
+    if (statsContainers.length === 0) {
+        return;
+    }
+    loadVisibleStats();
+    setInterval(loadVisibleStats, STATS_POLL_MS);
+
+    document.querySelectorAll('.accordion-collapse[data-stream-publisher]').forEach(collapseEl => {
+        collapseEl.addEventListener('shown.bs.collapse', function () {
+            collapseEl.querySelectorAll('[id^="stats-"]').forEach(container => {
+                const playerKey = container.dataset.playerKey;
+                if (playerKey) {
+                    loadStats(playerKey);
+                }
+            });
+        });
+    });
+}
+
 function initializeAccordionState() {
     const accordion = document.getElementById('streamAccordion');
     if (!accordion || !window.bootstrap || !window.bootstrap.Collapse) {
         return;
     }
+
     const collapseEls = accordion.querySelectorAll('.accordion-collapse[data-stream-publisher]');
     if (collapseEls.length === 0) {
         return;
     }
+
     const byPublisher = {};
     collapseEls.forEach(el => {
         const publisher = el.dataset.streamPublisher;
@@ -239,6 +249,7 @@ function initializeAccordionState() {
             }
         });
     });
+
     const savedPublisher = localStorage.getItem(ACTIVE_STREAM_KEY);
     const savedCollapse = savedPublisher ? byPublisher[savedPublisher] : null;
     if (savedCollapse) {
@@ -246,8 +257,8 @@ function initializeAccordionState() {
     } else if (savedPublisher) {
         localStorage.removeItem(ACTIVE_STREAM_KEY);
     }
-    const actionForms = accordion.querySelectorAll('form.stream-action-form');
-    actionForms.forEach(form => {
+
+    accordion.querySelectorAll('form.stream-action-form').forEach(form => {
         form.addEventListener('submit', function () {
             const collapse = form.closest('.accordion-collapse[data-stream-publisher]');
             if (!collapse) {
@@ -260,16 +271,16 @@ function initializeAccordionState() {
         });
     });
 }
-function getPublisherSelectorValue(publisher) {
-    if (window.CSS && typeof window.CSS.escape === 'function') {
-        return window.CSS.escape(publisher);
-    }
-    return publisher.replace(/"/g, '\\"');
+
+function visiblePushForms() {
+    return Array.from(document.querySelectorAll('.accordion-collapse.show form[data-push-publisher]'));
 }
+
 function updatePushRouteCard(route) {
     if (!route || !route.publisher) {
         return;
     }
+
     const selectorValue = getPublisherSelectorValue(route.publisher);
     const form = document.querySelector(`form[data-push-publisher="${selectorValue}"]`);
     if (!form) {
@@ -306,11 +317,17 @@ function updatePushRouteCard(route) {
         if (toggleBtn.textContent.trim() !== nextLabel) {
             toggleBtn.textContent = nextLabel;
         }
-        toggleBtn.classList.remove('btn-warning', 'btn-primary');
-        toggleBtn.classList.add(enabled ? 'btn-warning' : 'btn-primary');
+        toggleBtn.classList.remove('btn-warning', 'btn-opn-primary', 'btn-primary');
+        toggleBtn.classList.add(enabled ? 'btn-warning' : 'btn-opn-primary');
     }
 }
+
 function pollPushRouteStatus() {
+    const activePublishers = new Set(visiblePushForms().map(form => form.dataset.pushPublisher));
+    if (activePublishers.size === 0) {
+        return;
+    }
+
     fetch('/api/push/routes-status/')
         .then(response => {
             if (!response.ok) {
@@ -322,12 +339,17 @@ function pollPushRouteStatus() {
             if (!data || data.status !== 'success' || !Array.isArray(data.routes)) {
                 return;
             }
-            data.routes.forEach(route => updatePushRouteCard(route));
+            data.routes.forEach(route => {
+                if (activePublishers.has(route.publisher)) {
+                    updatePushRouteCard(route);
+                }
+            });
         })
         .catch(() => {
-            // Keep the last rendered state and retry on the next poll.
+            // Keep current UI state and retry on the next poll.
         });
 }
+
 function initializePushStatusPolling() {
     const forms = document.querySelectorAll('form[data-push-publisher]');
     if (forms.length === 0) {
@@ -336,12 +358,17 @@ function initializePushStatusPolling() {
     pollPushRouteStatus();
     setInterval(pollPushRouteStatus, PUSH_STATUS_POLL_MS);
 }
-function formatUptime(seconds) {
-    if (!seconds) return '00:00:00';
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    return days > 0 ? `${days}d ${time}` : time;
-}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const publisherInput = document.getElementById('publisher');
+    const playerInput = document.getElementById('player');
+    if (publisherInput && !publisherInput.value) {
+        publisherInput.value = generateKey('live_', 16);
+    }
+    if (playerInput && !playerInput.value) {
+        playerInput.value = generateKey('play_', 16);
+    }
+    initializeAccordionState();
+    initializeStats();
+    initializePushStatusPolling();
+});

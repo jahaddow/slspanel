@@ -18,6 +18,14 @@ services:
       - REQUIRE_LOGIN=True
       - USERNAME=admin
       - PASSWORD=change-me
+      - SLSPANEL_ALLOWED_HOSTS=localhost,127.0.0.1,your-sls-domain-sls-domain-ip,your-sls-stats-domain-sls-domain-ip
+      - SLSPANEL_CSRF_TRUSTED_ORIGINS=
+      - SLSPANEL_SECURE_COOKIES=False
+      - SLSPANEL_TRUST_PROXY_SSL_HEADER=False
+      - SLSPANEL_ENABLE_LOGIN_THROTTLE=True
+      - SLSPANEL_LOGIN_THROTTLE_WINDOW_SECONDS=300
+      - SLSPANEL_LOGIN_THROTTLE_MAX_ATTEMPTS=6
+      - SLSPANEL_LOGIN_LOCKOUT_SECONDS=900
     ports:
       - "8000:8000/tcp"
     volumes:
