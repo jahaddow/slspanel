@@ -343,9 +343,8 @@ def update_push_route(request, publisher_key):
 
     if action == 'save':
         destination_url = request.POST.get('destination_url', '').strip()
-        valid_schemes = ('srt://', 'rtmp://', 'rtmps://')
-        if destination_url and not destination_url.startswith(valid_schemes):
-            route.last_error = 'Destination URL must start with srt://, rtmp://, or rtmps://'
+        if destination_url and not destination_url.startswith('srt://'):
+            route.last_error = 'Destination URL must start with srt://'
         else:
             route.destination_url = destination_url
             if not destination_url:
