@@ -12,8 +12,10 @@ document.addEventListener('DOMContentLoaded', function(){
     if (playerInput && !playerInput.value) {
         playerInput.value = generateKey('play_', 16);
     }
+    initializeAccordionState();
     initializeStats();
 });
+const ACTIVE_STREAM_KEY = 'slspanel.activeStreamPublisher';
 async function copyToClipboard(element) {
     const text = element.getAttribute('data-url');
     try {
@@ -85,13 +87,60 @@ function initializeStats() {
         });
     }, 1000);
 }
+function pickActivePublisherMetrics(data) {
+    if (!data || typeof data !== 'object') {
+        return null;
+    }
+    const publisher = data.publisher;
+    if (publisher && typeof publisher === 'object' && hasUsableStats(publisher)) {
+        return publisher;
+    }
+    const publishers = data.publishers;
+    if (publishers && typeof publishers === 'object') {
+        const entries = Object.values(publishers).filter(metrics => hasUsableStats(metrics));
+        if (entries.length > 0) {
+            entries.sort((a, b) => scoreMetrics(b) - scoreMetrics(a));
+            return entries[0];
+        }
+    }
+    return null;
+}
+function numericValue(value) {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+}
+function scoreMetrics(metrics) {
+    if (!metrics || typeof metrics !== 'object') {
+        return 0;
+    }
+    return (
+        numericValue(metrics.mbps_recv_rate) * 1000000 +
+        numericValue(metrics.bitrate) * 1000 +
+        numericValue(metrics.uptime)
+    );
+}
+function hasUsableStats(metrics) {
+    if (!metrics || typeof metrics !== 'object') {
+        return false;
+    }
+    return (
+        numericValue(metrics.bitrate) > 0 ||
+        numericValue(metrics.mbps_recv_rate) > 0 ||
+        numericValue(metrics.uptime) > 0
+    );
+}
 function loadStats(playerKey) {
     const statsContainer = document.getElementById(`stats-${playerKey}`);
     if (!statsContainer) {
         return;
     }
-    const langCode = document.documentElement.lang || 'en';
-    const url = `/${langCode}/sls-stats/${playerKey}/`;
+    const url = `/sls-stats/${playerKey}/`;
     fetch(url)
         .then(response => {
             if (!response.ok) {
@@ -104,21 +153,22 @@ function loadStats(playerKey) {
                 statsContainer.innerHTML = `<p class="text-danger">${data.error}</p>`;
                 return;
             }
-            const publisher = data.publisher || {};
-            if (!data.publisher || Object.keys(publisher).length === 0) {
+            const publisher = pickActivePublisherMetrics(data);
+            if (!publisher) {
                 const translations = window.translations || {};
                 statsContainer.innerHTML = `<p class="text-muted"><em>${translations.statsNotAvailable}</em></p>`;
                 return;
             }
-            const bitrate = publisher.bitrate || 0;
-            const buffer = publisher.buffer || 0;
-            const droppedPkts = publisher.dropped_pkts || 0;
-            const latency = publisher.latency || 0;
-            const rtt = publisher.rtt ? publisher.rtt.toFixed(2) : '0.00';
-            const uptime = formatUptime(publisher.uptime || 0);
+            const bitrate = numericValue(publisher.bitrate);
+            const buffer = numericValue(publisher.buffer);
+            const droppedPkts = numericValue(publisher.dropped_pkts);
+            const latency = numericValue(publisher.latency);
+            const rtt = numericValue(publisher.rtt).toFixed(2);
+            const uptime = formatUptime(numericValue(publisher.uptime));
             const status = data.status || 'unknown';
             const statusClass = status === 'ok' ? 'text-success' : 'text-warning';
             const translations = window.translations || {};
+            statsContainer.dataset.loaded = '1';
             statsContainer.innerHTML = `
                 <div class="mt-2 p-2 bg-dark bg-opacity-50 rounded">
                     <h6 class="mb-2">${translations.streamStatistics}</h6>
@@ -156,8 +206,57 @@ function loadStats(playerKey) {
             `;
         })
         .catch(error => {
-            statsContainer.innerHTML = `<p><em>${window.translations.statsNotAvailable}</em></p>`;
+            if (!statsContainer.dataset.loaded) {
+                statsContainer.innerHTML = `<p><em>${window.translations.statsNotAvailable}</em></p>`;
+            }
         });
+}
+function initializeAccordionState() {
+    const accordion = document.getElementById('streamAccordion');
+    if (!accordion || !window.bootstrap || !window.bootstrap.Collapse) {
+        return;
+    }
+    const collapseEls = accordion.querySelectorAll('.accordion-collapse[data-stream-publisher]');
+    if (collapseEls.length === 0) {
+        return;
+    }
+    const byPublisher = {};
+    collapseEls.forEach(el => {
+        const publisher = el.dataset.streamPublisher;
+        if (publisher) {
+            byPublisher[publisher] = el;
+        }
+        el.addEventListener('shown.bs.collapse', function () {
+            if (publisher) {
+                localStorage.setItem(ACTIVE_STREAM_KEY, publisher);
+            }
+        });
+        el.addEventListener('hidden.bs.collapse', function () {
+            if (publisher && localStorage.getItem(ACTIVE_STREAM_KEY) === publisher) {
+                localStorage.removeItem(ACTIVE_STREAM_KEY);
+            }
+        });
+    });
+    const savedPublisher = localStorage.getItem(ACTIVE_STREAM_KEY);
+    const savedCollapse = savedPublisher ? byPublisher[savedPublisher] : null;
+    if (savedCollapse) {
+        window.bootstrap.Collapse.getOrCreateInstance(savedCollapse, { toggle: false }).show();
+    } else if (savedPublisher) {
+        localStorage.removeItem(ACTIVE_STREAM_KEY);
+    }
+    const actionForms = accordion.querySelectorAll('form.stream-action-form');
+    actionForms.forEach(form => {
+        form.addEventListener('submit', function () {
+            const collapse = form.closest('.accordion-collapse[data-stream-publisher]');
+            if (!collapse) {
+                return;
+            }
+            const publisher = collapse.dataset.streamPublisher;
+            if (publisher) {
+                localStorage.setItem(ACTIVE_STREAM_KEY, publisher);
+            }
+        });
+    });
 }
 function formatUptime(seconds) {
     if (!seconds) return '00:00:00';

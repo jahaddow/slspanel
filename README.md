@@ -10,6 +10,7 @@ A web-based control panel for SLS live streaming servers.
 - Stream management
 - Player and URL management
 - Real-time statistics viewer
+- Supports both single-publisher and multi-publisher SLS stats payloads
 - Per-stream SRT push configuration and toggle
 - Optional authentication
 - Docker-ready deployment
