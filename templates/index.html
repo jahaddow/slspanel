@@ -91,6 +91,9 @@
                     <div><strong>Disable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/disable</code></div>
                     <div><strong>Status URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/status</code></div>
                     <div><strong>Header:</strong> <code>Authorization: Bearer {{ stream.push.new_control_token }}</code></div>
+                    <div><strong>Browser Enable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/enable?token={{ stream.push.new_control_token }}</code></div>
+                    <div><strong>Browser Disable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/disable?token={{ stream.push.new_control_token }}</code></div>
+                    <div><strong>Browser Status URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/status?token={{ stream.push.new_control_token }}</code></div>
                 </div>
                 {% endif %}
 

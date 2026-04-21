@@ -133,10 +133,15 @@ def internal_token_ok(request):
 
 def control_token_ok(request, publisher):
     auth_header = request.headers.get('Authorization', '')
-    if not auth_header.startswith('Bearer '):
-        return None, JsonResponse({"ok": False, "summary": "missing bearer token"}, status=401)
+    provided = ''
+    if auth_header.startswith('Bearer '):
+        provided = auth_header.split(' ', 1)[1]
+    elif request.GET.get('token'):
+        provided = request.GET.get('token', '')
 
-    provided = auth_header.split(' ', 1)[1]
+    if not provided:
+        return None, JsonResponse({"ok": False, "summary": "missing token"}, status=401)
+
     token_hash = hash_token(provided)
 
     token = PushControlToken.objects.filter(token_hash=token_hash, publisher=publisher, active=True).first()
@@ -423,8 +428,8 @@ def internal_push_status(request):
 
 @csrf_exempt
 def api_push_enable(request, publisher_key):
-    if request.method != 'POST':
-        return HttpResponseBadRequest('POST required')
+    if request.method not in {'POST', 'GET'}:
+        return HttpResponseBadRequest('POST or GET required')
 
     _token, error = control_token_ok(request, publisher_key)
     if error is not None:
@@ -449,8 +454,8 @@ def api_push_enable(request, publisher_key):
 
 @csrf_exempt
 def api_push_disable(request, publisher_key):
-    if request.method != 'POST':
-        return HttpResponseBadRequest('POST required')
+    if request.method not in {'POST', 'GET'}:
+        return HttpResponseBadRequest('POST or GET required')
 
     _token, error = control_token_ok(request, publisher_key)
     if error is not None:

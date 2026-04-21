@@ -88,3 +88,4 @@ SLSPanel can issue per-stream control tokens for push relay control:
 - `GET /api/push/control/{publisher}/status`
 
 Each token is scoped to a single publisher stream.
+For browser testing, `enable`/`disable` also accept `GET` with `?token=...`.
