@@ -42,6 +42,7 @@ docker run -d \
   -e SLS_API_URL=http://localhost:8789 \
   -e SLS_API_KEY=your_api_key \
   -e PUSH_INTERNAL_TOKEN=change-me \
+  -e SLSPANEL_DB_PATH=/app/data/db.sqlite3 \
   -e SLS_DOMAIN_IP=localhost \
   -e TZ=UTC \
   -e SRT_PUBLISH_PORT=4000 \
@@ -49,6 +50,7 @@ docker run -d \
   -e SRTLA_PUBLISH_PORT=5000 \
   -e SLS_STATS_PORT=8789 \
   -p 8000:8000/tcp \
+  -v slspanel-data:/app/data \
   ghcr.io/jahaddow/slspanel:latest
 ```
 
@@ -62,12 +64,18 @@ docker run -d \
 | `SLS_API_URL` | SLS server API endpoint | - | Yes |
 | `SLS_API_KEY` | SLS API key | - | Yes |
 | `PUSH_INTERNAL_TOKEN` | Internal auth token shared with srtla-server push runner | - | Yes (for push relay) |
+| `SLSPANEL_DB_PATH` | SQLite database path inside container | `/app/data/db.sqlite3` | No |
 | `SLS_DOMAIN_IP` | Domain/IP for stream URLs | `localhost` | Yes |
 | `TZ` | Timezone | `UTC` | No |
 | `SRT_PUBLISH_PORT` | SRT publishing port | `4000` | Yes |
 | `SRT_PLAYER_PORT` | SRT playback port | `4001` | Yes |
 | `SRTLA_PUBLISH_PORT` | SRTLA publishing port | `5000` | Yes |
 | `SLS_STATS_PORT` | SLS statistics port | `8789` | Yes |
+
+## Data Persistence
+
+- Mount a persistent volume at `/app/data` to retain panel users, push destinations, and push control tokens across container updates.
+- If your deployment previously ran without this volume, older data from that period cannot be restored unless you still have a backup of the prior `db.sqlite3`.
 
 ## Related Projects
 

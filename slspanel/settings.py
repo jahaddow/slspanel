@@ -24,6 +24,7 @@ SLS_STATS_PORT = int(os.getenv("SLS_STATS_PORT", 8789))
 SLS_API_URL = os.getenv("SLS_API_URL", "http://localhost:8789")
 SLS_API_KEY = os.getenv("SLS_API_KEY", "")
 PUSH_INTERNAL_TOKEN = os.getenv("PUSH_INTERNAL_TOKEN", "")
+SLSPANEL_DB_PATH = os.getenv("SLSPANEL_DB_PATH", "/app/data/db.sqlite3")
 
 USE_I18N = True
 USE_L10N = True
@@ -78,7 +79,7 @@ SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': SLSPANEL_DB_PATH,
     }
 }
 

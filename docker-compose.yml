@@ -8,6 +8,7 @@ services:
       - SLS_API_URL=http://sls-api-url:8789
       - SLS_API_KEY=yourapikey
       - PUSH_INTERNAL_TOKEN=change-me
+      - SLSPANEL_DB_PATH=/app/data/db.sqlite3
       - SRT_PUBLISH_PORT=4001
       - SRT_PLAYER_PORT=4000
       - SRTLA_PUBLISH_PORT=5000
@@ -19,3 +20,8 @@ services:
       - PASSWORD=change-me
     ports:
       - "8000:8000/tcp"
+    volumes:
+      - slspanel-data:/app/data
+
+volumes:
+  slspanel-data:
