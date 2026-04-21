@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - beta
   workflow_dispatch:
 
 jobs:
@@ -29,6 +30,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve image tags
+        id: tags
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "beta" ]; then
+            echo "channel_tag=beta" >> "$GITHUB_OUTPUT"
+            echo "sha_tag=beta-sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel_tag=latest" >> "$GITHUB_OUTPUT"
+            echo "sha_tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
@@ -36,5 +48,5 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8
           push: true
           tags: |
-            ghcr.io/jahaddow/slspanel:latest
-            ghcr.io/jahaddow/slspanel:sha-${{ github.sha }}
+            ghcr.io/jahaddow/slspanel:${{ steps.tags.outputs.channel_tag }}
+            ghcr.io/jahaddow/slspanel:${{ steps.tags.outputs.sha_tag }}

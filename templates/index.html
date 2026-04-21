@@ -53,10 +53,10 @@
                 <h5>{% trans 'Push Relay' %}</h5>
                 <form method="post" action="{% url 'streams:update_push_route' stream.publisher %}" class="mb-3 stream-action-form" data-push-publisher="{{ stream.publisher }}">
                     {% csrf_token %}
-                    <label for="push-destination-{{ forloop.counter }}" class="form-label fw-bold">SRT destination URL</label>
+                    <label for="push-destination-{{ forloop.counter }}" class="form-label fw-bold">Push destination URL</label>
                     <input id="push-destination-{{ forloop.counter }}" type="text" class="form-control"
                            name="destination_url" value="{{ stream.push.destination_url }}"
-                           placeholder="srt://destination-host:port?mode=caller">
+                           placeholder="srt://... or rtmp(s)://...">
                     <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
                         <button type="submit" name="action" value="save" class="btn btn-sm btn-outline-light">Save destination</button>
                         <button type="submit" name="action" value="toggle" class="btn btn-sm {% if stream.push.enabled %}btn-warning{% else %}btn-primary{% endif %}" data-push-toggle-btn>
