@@ -1,3 +1,4 @@
+import hashlib
 import json
 import secrets
 
@@ -10,7 +11,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import PushRoute
+from .models import PushControlToken, PushRoute
 
 API_URL = settings.SLS_API_URL if hasattr(settings, 'SLS_API_URL') else 'http://localhost:8789'
 API_KEY = settings.SLS_API_KEY if hasattr(settings, 'SLS_API_KEY') else ''
@@ -110,6 +111,10 @@ def push_state_badge(state):
     return 'warning'
 
 
+def hash_token(token):
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
 def internal_token_ok(request):
     configured = getattr(settings, 'PUSH_INTERNAL_TOKEN', '')
     if not configured:
@@ -126,12 +131,45 @@ def internal_token_ok(request):
     return True, None
 
 
+def control_token_ok(request, publisher):
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return None, JsonResponse({"ok": False, "summary": "missing bearer token"}, status=401)
+
+    provided = auth_header.split(' ', 1)[1]
+    token_hash = hash_token(provided)
+
+    token = PushControlToken.objects.filter(token_hash=token_hash, publisher=publisher, active=True).first()
+    if token is None:
+        return None, JsonResponse({"ok": False, "summary": "invalid or inactive control token"}, status=403)
+
+    token.last_used_at = timezone.now()
+    token.save(update_fields=['last_used_at'])
+    return token, None
+
+
+def summarize_state(route, publisher):
+    return {
+        "ok": True,
+        "publisher": publisher,
+        "enabled": bool(route.enabled),
+        "runner_state": route.runner_state,
+        "summary": f"push {'enabled' if route.enabled else 'disabled'} ({route.runner_state})",
+        "timestamp": timezone.now().isoformat(),
+    }
+
+
 @conditional_login_required
 def index(request):
     entries = get_stream_entries()
     streams = map_publishers(entries)
 
     routes_by_publisher = {route.publisher: route for route in PushRoute.objects.all()}
+    token_count = {}
+    for row in PushControlToken.objects.filter(active=True).values('publisher'):
+        key = row['publisher']
+        token_count[key] = token_count.get(key, 0) + 1
+
     for stream in streams:
         route = routes_by_publisher.get(stream['publisher'])
         push = {
@@ -140,6 +178,8 @@ def index(request):
             'runner_state': 'stopped',
             'runner_badge': push_state_badge('stopped'),
             'last_error': '',
+            'token_count': token_count.get(stream['publisher'], 0),
+            'new_control_token': request.session.pop(f"control_token_{stream['publisher']}", None),
         }
         if route is not None:
             push.update({
@@ -158,6 +198,7 @@ def index(request):
         'srtla_publish_port': settings.SRTLA_PUBLISH_PORT,
         'sls_domain_ip': settings.SLS_DOMAIN_IP,
         'sls_stats_port': settings.SLS_STATS_PORT,
+        'base_url': request.build_absolute_uri('/').rstrip('/'),
     }
     return render(request, 'index.html', context)
 
@@ -259,6 +300,7 @@ def delete_stream(request, publisher_key):
     for play_key in player_keys:
         call_api('DELETE', f'/api/stream-ids/{play_key}')
     PushRoute.objects.filter(publisher=publisher_key).delete()
+    PushControlToken.objects.filter(publisher=publisher_key).update(active=False)
     return redirect('streams:index')
 
 
@@ -294,6 +336,32 @@ def update_push_route(request, publisher_key):
             route.last_error = ''
 
     route.save()
+    return redirect('streams:index')
+
+
+@conditional_login_required
+def create_control_token(request, publisher_key):
+    if request.method != 'POST':
+        return redirect('streams:index')
+
+    label = request.POST.get('token_label', '').strip()
+    token = secrets.token_urlsafe(32)
+    PushControlToken.objects.create(
+        publisher=publisher_key,
+        label=label,
+        token_hash=hash_token(token),
+        active=True,
+    )
+    request.session[f"control_token_{publisher_key}"] = token
+    return redirect('streams:index')
+
+
+@conditional_login_required
+def revoke_control_tokens(request, publisher_key):
+    if request.method != 'POST':
+        return redirect('streams:index')
+
+    PushControlToken.objects.filter(publisher=publisher_key, active=True).update(active=False)
     return redirect('streams:index')
 
 
@@ -351,3 +419,57 @@ def internal_push_status(request):
     route.save()
 
     return JsonResponse({'status': 'success'})
+
+
+@csrf_exempt
+def api_push_enable(request, publisher_key):
+    if request.method != 'POST':
+        return HttpResponseBadRequest('POST required')
+
+    _token, error = control_token_ok(request, publisher_key)
+    if error is not None:
+        return error
+
+    route, _created = PushRoute.objects.get_or_create(publisher=publisher_key)
+    if not route.destination_url:
+        return JsonResponse({
+            "ok": False,
+            "publisher": publisher_key,
+            "enabled": False,
+            "runner_state": route.runner_state,
+            "summary": "cannot enable push: destination URL is empty",
+            "timestamp": timezone.now().isoformat(),
+        }, status=400)
+
+    route.enabled = True
+    route.last_error = ''
+    route.save()
+    return JsonResponse(summarize_state(route, publisher_key))
+
+
+@csrf_exempt
+def api_push_disable(request, publisher_key):
+    if request.method != 'POST':
+        return HttpResponseBadRequest('POST required')
+
+    _token, error = control_token_ok(request, publisher_key)
+    if error is not None:
+        return error
+
+    route, _created = PushRoute.objects.get_or_create(publisher=publisher_key)
+    route.enabled = False
+    route.save()
+    return JsonResponse(summarize_state(route, publisher_key))
+
+
+@csrf_exempt
+def api_push_status(request, publisher_key):
+    if request.method != 'GET':
+        return HttpResponseBadRequest('GET required')
+
+    _token, error = control_token_ok(request, publisher_key)
+    if error is not None:
+        return error
+
+    route, _created = PushRoute.objects.get_or_create(publisher=publisher_key)
+    return JsonResponse(summarize_state(route, publisher_key))

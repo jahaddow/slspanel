@@ -57,7 +57,7 @@
                     <input id="push-destination-{{ forloop.counter }}" type="text" class="form-control"
                            name="destination_url" value="{{ stream.push.destination_url }}"
                            placeholder="srt://destination-host:port?mode=caller">
-                    <div class="mt-2 d-flex gap-2 align-items-center">
+                    <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
                         <button type="submit" name="action" value="save" class="btn btn-sm btn-outline-light">Save destination</button>
                         <button type="submit" name="action" value="toggle" class="btn btn-sm {% if stream.push.enabled %}btn-warning{% else %}btn-primary{% endif %}">
                             {% if stream.push.enabled %}Disable push{% else %}Enable push{% endif %}
@@ -68,6 +68,31 @@
                     <div class="alert alert-danger mt-2 mb-0 py-1 px-2">{{ stream.push.last_error }}</div>
                     {% endif %}
                 </form>
+
+                <h6>Companion Remote Control (this stream only)</h6>
+                <div class="mb-2">Active tokens: {{ stream.push.token_count }}</div>
+                <form method="post" action="{% url 'streams:create_control_token' stream.publisher %}" class="mb-2 d-flex gap-2 align-items-center flex-wrap">
+                    {% csrf_token %}
+                    <input type="text" class="form-control form-control-sm" style="max-width: 260px" name="token_label" placeholder="Token label (optional)">
+                    <button type="submit" class="btn btn-sm btn-outline-info">Create control token</button>
+                </form>
+                <form method="post" action="{% url 'streams:revoke_control_tokens' stream.publisher %}" class="mb-2">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Revoke all tokens for this stream</button>
+                </form>
+
+                {% if stream.push.new_control_token %}
+                <div class="alert alert-warning py-2 px-2">
+                    <strong>New control token (shown once):</strong>
+                    <code>{{ stream.push.new_control_token }}</code>
+                </div>
+                <div class="small mb-3">
+                    <div><strong>Enable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/enable</code></div>
+                    <div><strong>Disable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/disable</code></div>
+                    <div><strong>Status URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/status</code></div>
+                    <div><strong>Header:</strong> <code>Authorization: Bearer {{ stream.push.new_control_token }}</code></div>
+                </div>
+                {% endif %}
 
                 <h5>{% trans 'Players' %}</h5>
                 {% if stream.player %}

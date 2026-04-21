@@ -19,3 +19,15 @@ class PushRoute(models.Model):
 
     def __str__(self):
         return f"PushRoute({self.publisher}, enabled={self.enabled})"
+
+
+class PushControlToken(models.Model):
+    publisher = models.CharField(max_length=255, db_index=True)
+    label = models.CharField(max_length=120, blank=True, default='')
+    token_hash = models.CharField(max_length=64, unique=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"PushControlToken({self.publisher}, active={self.active})"

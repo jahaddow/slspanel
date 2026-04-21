@@ -77,3 +77,14 @@ docker run -d \
 ## License
 
 MIT
+
+
+## Companion Remote Control
+
+SLSPanel can issue per-stream control tokens for push relay control:
+
+- `POST /api/push/control/{publisher}/enable`
+- `POST /api/push/control/{publisher}/disable`
+- `GET /api/push/control/{publisher}/status`
+
+Each token is scoped to a single publisher stream.
