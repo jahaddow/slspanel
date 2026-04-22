@@ -302,42 +302,16 @@ def api_push_routes_status(request):
     return JsonResponse({"status": "success", "routes": routes})
 
 
-def fetch_sls_stats_payload(player_key):
-    url = f"http://{settings.SLS_STATS_DOMAIN_IP}:{settings.SLS_STATS_PORT}/stats/{player_key}"
-    response = requests.get(url, timeout=5)
-    response.raise_for_status()
-    return response.json()
-
-
 @conditional_login_required
 def sls_stats(request, player_key):
     try:
-        return JsonResponse(fetch_sls_stats_payload(player_key))
+        url = f"http://{settings.SLS_STATS_DOMAIN_IP}:{settings.SLS_STATS_PORT}/stats/{player_key}"
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return JsonResponse(data)
     except Exception:
         return JsonResponse({"error": "Failed to fetch stats", "status": "error"}, status=500)
-
-
-@conditional_login_required
-def player_stats_page(request, player_key):
-    publisher_key = ""
-    player_description = ""
-    for stream in map_publishers(get_stream_entries()):
-        for player in stream.get("player", []):
-            if player.get("key") == player_key:
-                publisher_key = stream.get("publisher", "")
-                player_description = player.get("description", "")
-                break
-        if publisher_key:
-            break
-
-    context = {
-        "player_key": player_key,
-        "publisher_key": publisher_key,
-        "player_description": player_description,
-        "sls_domain_ip": settings.SLS_DOMAIN_IP,
-        "sls_stats_port": settings.SLS_STATS_PORT,
-    }
-    return render(request, "player_stats.html", context)
 
 
 @conditional_login_required

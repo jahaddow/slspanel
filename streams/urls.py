@@ -7,7 +7,6 @@ app_name = "streams"
 urlpatterns = [
     path('', views.index, name='index'),
     path('sls-stats/<str:player_key>/', views.sls_stats, name='sls_stats'),
-    path('stats/player/<str:player_key>/', views.player_stats_page, name='player_stats_page'),
     path('api/streams-status/', views.streams_status_json, name='streams_status_json'),
     path('api/push/routes-status/', views.api_push_routes_status, name='api_push_routes_status'),
     path('login/', views.login_view, name='login'),
