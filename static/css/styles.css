@@ -85,6 +85,7 @@ body.opn-app {
     --bs-accordion-active-bg: var(--opn-surface-soft);
     --bs-accordion-active-color: var(--opn-text);
     --bs-accordion-btn-color: var(--opn-text);
+    --bs-accordion-color: var(--opn-text);
     --bs-accordion-bg: transparent;
 }
 
@@ -94,6 +95,19 @@ body.opn-app {
     border-radius: 12px;
     margin-bottom: 0.85rem;
     overflow: hidden;
+    color: var(--opn-text);
+}
+
+.opn-stream-item .accordion-button,
+.opn-stream-item .accordion-body,
+.opn-stream-item .opn-card,
+.opn-stream-item .list-group-item,
+.opn-stream-item .form-label,
+.opn-stream-item h5,
+.opn-stream-item h6,
+.opn-stream-item p,
+.opn-stream-item strong {
+    color: var(--opn-text);
 }
 
 .opn-stream-header {
@@ -144,9 +158,19 @@ body.opn-app {
 }
 
 .opn-player-item {
+    --bs-list-group-bg: var(--opn-surface-soft);
+    --bs-list-group-color: var(--opn-text);
+    --bs-list-group-border-color: var(--opn-border);
     background: var(--opn-surface-soft);
     color: var(--opn-text);
     border-color: var(--opn-border);
+}
+
+.opn-stream-item code {
+    color: #ffe17a;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 0.1rem 0.25rem;
+    border-radius: 4px;
 }
 
 .login-wrap {
