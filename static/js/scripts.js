@@ -209,12 +209,21 @@ function normalizeConsumerConnection(raw, index) {
         latency: raw.latency,
         rtt: raw.rtt,
         bitrate: raw.bitrate,
-        recvRate: raw.mbps_recv_rate,
+        recvRate: raw.mbps_recv_rate ?? raw.recv_rate_mbps ?? raw.mbpsRecvRate,
         buffer: raw.buffer,
         dropped: raw.dropped_pkts,
         uptime: raw.uptime,
         status: raw.status || raw.state || 'connected'
     };
+}
+
+function formatConsumerRate(conn) {
+    const kbps = numericValue(conn.bitrate);
+    const mbps = numericValue(conn.recvRate);
+    if (mbps > 0) {
+        return `${kbps} kbps / ${mbps.toFixed(2)} Mbps`;
+    }
+    return `${kbps} kbps`;
 }
 
 function extractConsumerConnections(data) {
@@ -357,7 +366,7 @@ function renderConsumerList(container, payload) {
             <td>${conn.endpoint}</td>
             <td>${numericValue(conn.latency)} ms</td>
             <td>${numericValue(conn.rtt).toFixed(2)} ms</td>
-            <td>${numericValue(conn.bitrate)} kbps / ${numericValue(conn.recvRate)} Mbps</td>
+            <td>${formatConsumerRate(conn)}</td>
             <td>${numericValue(conn.buffer)} ms</td>
             <td>${numericValue(conn.dropped)}</td>
             <td>${formatUptime(numericValue(conn.uptime))}</td>
