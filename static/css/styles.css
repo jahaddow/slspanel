@@ -158,13 +158,19 @@ body.opn-app {
     color: var(--opn-text);
 }
 
-.opn-stream-item[draggable="true"] {
-    cursor: move;
-}
-
 .opn-stream-item.opn-dragging {
     opacity: 0.55;
     border-color: rgba(243, 198, 23, 0.8);
+}
+
+.opn-drag-handle {
+    cursor: grab;
+    white-space: nowrap;
+}
+
+.opn-drag-handle:active,
+.opn-drag-handle.opn-dragging-handle {
+    cursor: grabbing;
 }
 
 .opn-stream-item .accordion-button,

@@ -31,7 +31,7 @@
         <div id="group-body-{{ forloop.counter }}" class="collapse show" data-group-collapse data-group-key="{{ group.name|default:'__ungrouped__' }}">
             <div class="accordion opn-accordion opn-group-accordion" id="streamAccordion-{{ forloop.counter }}" data-group-accordion>
                 {% for stream in group.streams %}
-                <div class="accordion-item opn-stream-item" data-stream-item data-stream-publisher="{{ stream.publisher }}" draggable="true">
+                <div class="accordion-item opn-stream-item" data-stream-item data-stream-publisher="{{ stream.publisher }}">
                     <h2 class="accordion-header" id="heading-{{ stream.publisher }}">
                         <div class="opn-stream-headline">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ stream.publisher }}" aria-expanded="false">
@@ -53,6 +53,7 @@
                                     <button type="submit" class="btn btn-sm btn-opn-primary">Save</button>
                                 </form>
                             </details>
+                            <button type="button" class="btn btn-outline-light btn-sm opn-drag-handle" data-drag-handle draggable="true" title="Drag to reorder stream" aria-label="Drag to reorder stream">Reorder</button>
                         </div>
                     </h2>
                     <div id="collapse-{{ stream.publisher }}" class="accordion-collapse collapse" data-stream-publisher="{{ stream.publisher }}" data-bs-parent="#streamAccordion-{{ forloop.parentloop.counter }}">

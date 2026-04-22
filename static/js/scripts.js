@@ -821,15 +821,30 @@ function initializeStreamLayoutDnD() {
         }, LAYOUT_SAVE_DEBOUNCE_MS);
     };
 
-    root.querySelectorAll('[data-stream-item][draggable="true"]').forEach(item => {
-        item.addEventListener('dragstart', event => {
+    root.querySelectorAll('[data-drag-handle][draggable="true"]').forEach(handle => {
+        handle.addEventListener('dragstart', event => {
+            const interactiveTarget = event.target.closest('.blur-text,button,input,a,summary,form');
+            if (interactiveTarget && !interactiveTarget.closest('[data-drag-handle]')) {
+                event.preventDefault();
+                return;
+            }
+            const item = handle.closest('[data-stream-item][data-stream-publisher]');
+            if (!item) {
+                event.preventDefault();
+                return;
+            }
             draggedItem = item;
             item.classList.add('opn-dragging');
+            handle.classList.add('opn-dragging-handle');
             event.dataTransfer.effectAllowed = 'move';
         });
 
-        item.addEventListener('dragend', () => {
-            item.classList.remove('opn-dragging');
+        handle.addEventListener('dragend', () => {
+            const item = handle.closest('[data-stream-item][data-stream-publisher]');
+            if (item) {
+                item.classList.remove('opn-dragging');
+            }
+            handle.classList.remove('opn-dragging-handle');
             draggedItem = null;
         });
     });
