@@ -31,3 +31,14 @@ class PushControlToken(models.Model):
 
     def __str__(self):
         return f"PushControlToken({self.publisher}, active={self.active})"
+
+
+class StreamMeta(models.Model):
+    publisher = models.CharField(max_length=255, unique=True)
+    sort_order = models.IntegerField(default=0)
+    group_name = models.CharField(max_length=120, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"StreamMeta({self.publisher}, group={self.group_name or 'default'}, order={self.sort_order})"

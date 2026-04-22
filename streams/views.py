@@ -1,6 +1,7 @@
 import hashlib
 import json
 import secrets
+from collections import defaultdict
 
 import requests
 from django.conf import settings
@@ -12,7 +13,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import PushControlToken, PushRoute
+from .models import PushControlToken, PushRoute, StreamMeta
 
 API_URL = settings.SLS_API_URL if hasattr(settings, 'SLS_API_URL') else 'http://localhost:8789'
 API_KEY = settings.SLS_API_KEY if hasattr(settings, 'SLS_API_KEY') else ''
@@ -157,6 +158,45 @@ def map_publishers(entries):
     return streams
 
 
+def normalize_group_name(raw_value):
+    return (raw_value or '').strip()
+
+
+def apply_stream_layout(streams):
+    meta_by_publisher = {
+        row.publisher: row
+        for row in StreamMeta.objects.filter(
+            publisher__in=[stream['publisher'] for stream in streams]
+        )
+    }
+
+    ordered = []
+    for default_index, stream in enumerate(streams):
+        meta = meta_by_publisher.get(stream['publisher'])
+        stream['group_name'] = normalize_group_name(meta.group_name if meta else '')
+        stream['sort_order'] = meta.sort_order if meta else default_index
+        ordered.append(stream)
+
+    ordered.sort(key=lambda item: (item['group_name'].lower(), item['sort_order'], item['publisher']))
+    return ordered
+
+
+def build_stream_groups(streams):
+    grouped = defaultdict(list)
+    for stream in streams:
+        group_key = stream.get('group_name') or ''
+        grouped[group_key].append(stream)
+
+    groups = []
+    for key in sorted(grouped.keys(), key=lambda value: (value == '', value.lower())):
+        groups.append({
+            'name': key,
+            'label': key or 'Ungrouped',
+            'streams': grouped[key],
+        })
+    return groups
+
+
 def push_state_badge(state):
     if state == 'running':
         return 'success'
@@ -210,12 +250,17 @@ def control_token_ok(request, publisher):
 
 
 def summarize_state(route, publisher):
+    message = (route.last_error or '').strip()
+    summary = message if message else f"push {'enabled' if route.enabled else 'disabled'} ({route.runner_state})"
     return {
         "ok": True,
         "publisher": publisher,
         "enabled": bool(route.enabled),
         "runner_state": route.runner_state,
-        "summary": f"push {'enabled' if route.enabled else 'disabled'} ({route.runner_state})",
+        "runner_badge": push_state_badge(route.runner_state),
+        "summary": summary,
+        "destination_url": route.destination_url,
+        "runner_updated_at": route.runner_updated_at.isoformat() if route.runner_updated_at else None,
         "timestamp": timezone.now().isoformat(),
     }
 
@@ -223,7 +268,7 @@ def summarize_state(route, publisher):
 @conditional_login_required
 def index(request):
     entries = get_stream_entries()
-    streams = map_publishers(entries)
+    streams = apply_stream_layout(map_publishers(entries))
 
     routes_by_publisher = {route.publisher: route for route in PushRoute.objects.all()}
     token_count = {}
@@ -238,9 +283,10 @@ def index(request):
             'enabled': False,
             'runner_state': 'stopped',
             'runner_badge': push_state_badge('stopped'),
-            'last_error': '',
+            'last_error': 'push disabled',
             'token_count': token_count.get(stream['publisher'], 0),
             'new_control_token': request.session.pop(f"control_token_{stream['publisher']}", None),
+            'runner_updated_at': None,
         }
         if route is not None:
             push.update({
@@ -248,12 +294,13 @@ def index(request):
                 'enabled': route.enabled,
                 'runner_state': route.runner_state,
                 'runner_badge': push_state_badge(route.runner_state),
-                'last_error': route.last_error,
+                'last_error': route.last_error or ('relay active' if route.runner_state == 'running' else ''),
+                'runner_updated_at': route.runner_updated_at.isoformat() if route.runner_updated_at else None,
             })
         stream['push'] = push
 
     context = {
-        'streams': streams,
+        'stream_groups': build_stream_groups(streams),
         'srt_publish_port': settings.SRT_PUBLISH_PORT,
         'srt_player_port': settings.SRT_PLAYER_PORT,
         'srtla_publish_port': settings.SRTLA_PUBLISH_PORT,
@@ -291,15 +338,74 @@ def api_push_routes_status(request):
 
     routes = []
     for route in PushRoute.objects.all():
+        state_message = (route.last_error or '').strip()
+        if not state_message:
+            if route.runner_state == 'running':
+                state_message = 'relay active'
+            elif route.enabled:
+                state_message = f"push enabled ({route.runner_state})"
+            else:
+                state_message = "push disabled"
         routes.append({
             "publisher": route.publisher,
             "enabled": bool(route.enabled),
             "runner_state": route.runner_state,
             "runner_badge": push_state_badge(route.runner_state),
-            "last_error": route.last_error,
+            "last_error": state_message,
+            "destination_url": route.destination_url,
+            "runner_updated_at": route.runner_updated_at.isoformat() if route.runner_updated_at else None,
         })
 
     return JsonResponse({"status": "success", "routes": routes})
+
+
+@conditional_login_required
+def update_stream_group(request, publisher_key):
+    if request.method != 'POST':
+        return redirect('streams:index')
+
+    group_name = normalize_group_name(request.POST.get('group_name'))
+    meta, _created = StreamMeta.objects.get_or_create(publisher=publisher_key)
+    meta.group_name = group_name
+    if _created and meta.sort_order == 0:
+        meta.sort_order = StreamMeta.objects.count()
+    meta.save(update_fields=['group_name', 'sort_order', 'updated_at'])
+    return redirect('streams:index')
+
+
+@conditional_login_required
+def save_stream_layout(request):
+    if request.method != 'POST':
+        return HttpResponseBadRequest('POST required')
+
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return HttpResponseBadRequest('Invalid JSON')
+
+    layout = payload.get('layout')
+    if not isinstance(layout, list):
+        return HttpResponseBadRequest('layout must be a list')
+
+    known_publishers = {row['publisher'] for row in map_publishers(get_stream_entries())}
+    sort_counter = 0
+    for row in layout:
+        publisher = row.get('publisher')
+        if publisher not in known_publishers:
+            continue
+
+        group_name = normalize_group_name(row.get('group_name'))
+        order = row.get('sort_order')
+        if not isinstance(order, int):
+            order = sort_counter
+
+        meta, _created = StreamMeta.objects.get_or_create(publisher=publisher)
+        meta.group_name = group_name
+        meta.sort_order = order
+        meta.save(update_fields=['group_name', 'sort_order', 'updated_at'])
+        sort_counter += 1
+
+    return JsonResponse({'status': 'success'})
 
 
 @conditional_login_required
@@ -392,6 +498,7 @@ def delete_stream(request, publisher_key):
         call_api('DELETE', f'/api/stream-ids/{play_key}')
     PushRoute.objects.filter(publisher=publisher_key).delete()
     PushControlToken.objects.filter(publisher=publisher_key).update(active=False)
+    StreamMeta.objects.filter(publisher=publisher_key).delete()
     return redirect('streams:index')
 
 
@@ -466,17 +573,12 @@ def internal_push_routes(request):
     if not ok:
         return response
 
-    entries = get_stream_entries()
-    publisher_to_player = {}
-    for stream in map_publishers(entries):
-        if stream.get('main_player'):
-            publisher_to_player[stream['publisher']] = stream['main_player']
-
     routes = []
     for route in PushRoute.objects.all():
         routes.append({
             'publisher': route.publisher,
-            'player': publisher_to_player.get(route.publisher),
+            'player': route.publisher,
+            'source_stream_id': route.publisher,
             'destination_url': route.destination_url,
             'enabled': route.enabled,
             'runner_state': route.runner_state,

@@ -7,12 +7,21 @@ function generateKey(prefix, bytes) {
 const ACTIVE_STREAM_KEY = 'slspanel.activeStreamPublisher';
 const PUSH_STATUS_POLL_MS = 2000;
 const STATS_POLL_MS = 2000;
+const LAYOUT_SAVE_DEBOUNCE_MS = 400;
 
 function getPublisherSelectorValue(publisher) {
     if (window.CSS && typeof window.CSS.escape === 'function') {
         return window.CSS.escape(publisher);
     }
     return publisher.replace(/"/g, '\\"');
+}
+
+function getCsrfToken() {
+    const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+    if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+    }
+    return '';
 }
 
 async function copyToClipboard(element) {
@@ -226,6 +235,22 @@ function formatConsumerRate(conn) {
     return `${kbps} kbps`;
 }
 
+function isInternalRelayConnection(conn) {
+    const endpoint = String(conn.endpoint || '').toLowerCase();
+    return endpoint.startsWith('127.0.0.1') || endpoint.startsWith('localhost') || endpoint.startsWith('::1');
+}
+
+function formatTimestamp(isoText) {
+    if (!isoText) {
+        return '-';
+    }
+    const date = new Date(isoText);
+    if (Number.isNaN(date.getTime())) {
+        return isoText;
+    }
+    return date.toLocaleString();
+}
+
 function extractConsumerConnections(data) {
     const found = [];
     let sawConsumerContainer = false;
@@ -339,10 +364,12 @@ function renderConsumerList(container, payload) {
         connections = extracted.connections;
     }
 
-    if (connections.length === 0) {
+    const visibleConnections = connections.filter(conn => !isInternalRelayConnection(conn));
+
+    if (visibleConnections.length === 0) {
         if (typeof payload.consumer_count === 'number') {
             if (payload.consumer_count > 0) {
-                container.innerHTML = '<p class="opn-muted"><em>Consumer count is reported, but per-connection details are unavailable in this payload.</em></p>';
+                container.innerHTML = '<p class="opn-muted"><em>No external consumers currently connected.</em></p>';
             } else {
                 container.innerHTML = '<p class="opn-muted"><em>No consumers currently connected.</em></p>';
             }
@@ -360,7 +387,7 @@ function renderConsumerList(container, payload) {
         return;
     }
 
-    const rows = connections.map(conn => `
+    const rows = visibleConnections.map(conn => `
         <tr>
             <td>${conn.id}</td>
             <td>${conn.endpoint}</td>
@@ -479,12 +506,12 @@ function initializeStats() {
 }
 
 function initializeAccordionState() {
-    const accordion = document.getElementById('streamAccordion');
-    if (!accordion || !window.bootstrap || !window.bootstrap.Collapse) {
+    const accordions = document.querySelectorAll('[data-group-accordion]');
+    if (accordions.length === 0 || !window.bootstrap || !window.bootstrap.Collapse) {
         return;
     }
 
-    const collapseEls = accordion.querySelectorAll('.accordion-collapse[data-stream-publisher]');
+    const collapseEls = document.querySelectorAll('.accordion-collapse[data-stream-publisher]');
     if (collapseEls.length === 0) {
         return;
     }
@@ -515,7 +542,7 @@ function initializeAccordionState() {
         localStorage.removeItem(ACTIVE_STREAM_KEY);
     }
 
-    accordion.querySelectorAll('form.stream-action-form').forEach(form => {
+    document.querySelectorAll('form.stream-action-form').forEach(form => {
         form.addEventListener('submit', function () {
             const collapse = form.closest('.accordion-collapse[data-stream-publisher]');
             if (!collapse) {
@@ -544,7 +571,8 @@ function updatePushRouteCard(route) {
         return;
     }
 
-    const badgeEl = form.querySelector('[data-push-runner-badge]');
+    const statusCard = document.querySelector(`[data-push-status-card][data-publisher="${selectorValue}"]`);
+    const badgeEl = statusCard ? statusCard.querySelector('[data-push-runner-badge]') : form.querySelector('[data-push-runner-badge]');
     if (badgeEl) {
         const nextText = `Runner: ${route.runner_state || 'unknown'}`;
         if (badgeEl.textContent.trim() !== nextText) {
@@ -553,17 +581,20 @@ function updatePushRouteCard(route) {
         badgeEl.className = `badge text-bg-${route.runner_badge || 'warning'}`;
     }
 
-    const errEl = form.querySelector('[data-push-last-error]');
+    const errEl = statusCard ? statusCard.querySelector('[data-push-last-error]') : form.querySelector('[data-push-last-error]');
     if (errEl) {
         const errorText = (route.last_error || '').trim();
-        if (errorText) {
-            if (errEl.textContent !== errorText) {
-                errEl.textContent = errorText;
-            }
-            errEl.classList.remove('d-none');
+        const displayText = errorText || 'status unavailable';
+        if (errEl.textContent !== displayText) {
+            errEl.textContent = displayText;
+        }
+        errEl.classList.remove('alert-danger', 'alert-secondary', 'alert-success');
+        if (route.runner_state === 'error' || route.runner_state === 'retrying') {
+            errEl.classList.add('alert-danger');
+        } else if (route.runner_state === 'running') {
+            errEl.classList.add('alert-success');
         } else {
-            errEl.textContent = '';
-            errEl.classList.add('d-none');
+            errEl.classList.add('alert-secondary');
         }
     }
 
@@ -576,6 +607,21 @@ function updatePushRouteCard(route) {
         }
         toggleBtn.classList.remove('btn-warning', 'btn-opn-primary', 'btn-primary');
         toggleBtn.classList.add(enabled ? 'btn-warning' : 'btn-opn-primary');
+    }
+
+    if (statusCard) {
+        const enabledEl = statusCard.querySelector('[data-push-enabled]');
+        if (enabledEl) {
+            enabledEl.textContent = route.enabled ? 'Yes' : 'No';
+        }
+        const destinationEl = statusCard.querySelector('[data-push-destination]');
+        if (destinationEl) {
+            destinationEl.textContent = (route.destination_url || '-').trim() || '-';
+        }
+        const updatedEl = statusCard.querySelector('[data-push-updated]');
+        if (updatedEl) {
+            updatedEl.textContent = formatTimestamp(route.runner_updated_at);
+        }
     }
 }
 
@@ -616,6 +662,105 @@ function initializePushStatusPolling() {
     setInterval(pollPushRouteStatus, PUSH_STATUS_POLL_MS);
 }
 
+function readLayoutPayload() {
+    const groups = Array.from(document.querySelectorAll('.opn-group[data-group-name]'));
+    const layout = [];
+    let sortOrder = 0;
+    groups.forEach(group => {
+        const groupName = group.dataset.groupName || '';
+        group.querySelectorAll('[data-stream-item][data-stream-publisher]').forEach(item => {
+            layout.push({
+                publisher: item.dataset.streamPublisher,
+                group_name: groupName,
+                sort_order: sortOrder,
+            });
+            sortOrder += 1;
+        });
+    });
+    return layout;
+}
+
+function initializeStreamLayoutDnD() {
+    const root = document.getElementById('streamLayoutRoot');
+    if (!root) {
+        return;
+    }
+
+    const endpoint = root.dataset.layoutEndpoint;
+    const csrfToken = root.dataset.csrfToken || getCsrfToken();
+    const groups = root.querySelectorAll('.opn-group');
+    if (!endpoint || groups.length === 0) {
+        return;
+    }
+
+    let draggedItem = null;
+    let saveTimer = null;
+
+    const scheduleSave = () => {
+        if (saveTimer) {
+            clearTimeout(saveTimer);
+        }
+        saveTimer = setTimeout(() => {
+            fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({ layout: readLayoutPayload() }),
+            }).catch(() => {
+                // Keep local layout and retry on next drag.
+            });
+        }, LAYOUT_SAVE_DEBOUNCE_MS);
+    };
+
+    root.querySelectorAll('[data-stream-item][draggable="true"]').forEach(item => {
+        item.addEventListener('dragstart', event => {
+            draggedItem = item;
+            item.classList.add('opn-dragging');
+            event.dataTransfer.effectAllowed = 'move';
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('opn-dragging');
+            draggedItem = null;
+        });
+    });
+
+    groups.forEach(group => {
+        const accordion = group.querySelector('[data-group-accordion]');
+        if (!accordion) {
+            return;
+        }
+
+        accordion.addEventListener('dragover', event => {
+            if (!draggedItem) {
+                return;
+            }
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            const siblings = Array.from(accordion.querySelectorAll('[data-stream-item]:not(.opn-dragging)'));
+            const next = siblings.find(candidate => {
+                const rect = candidate.getBoundingClientRect();
+                return event.clientY < rect.top + (rect.height / 2);
+            });
+            if (next) {
+                accordion.insertBefore(draggedItem, next);
+            } else {
+                accordion.appendChild(draggedItem);
+            }
+        });
+
+        accordion.addEventListener('drop', event => {
+            if (!draggedItem) {
+                return;
+            }
+            event.preventDefault();
+            scheduleSave();
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     const publisherInput = document.getElementById('publisher');
     const playerInput = document.getElementById('player');
@@ -628,4 +773,5 @@ document.addEventListener('DOMContentLoaded', function () {
     initializeAccordionState();
     initializeStats();
     initializePushStatusPolling();
+    initializeStreamLayoutDnD();
 });
