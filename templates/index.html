@@ -83,7 +83,7 @@
 
                             <section class="opn-card">
                                 <h5 class="opn-section-title">Stream Stats</h5>
-                                <div data-stream-stats>
+                                <div class="opn-stats-slab" data-stream-stats>
                                     <p class="opn-muted"><em>Expand this stream to load publisher statistics.</em></p>
                                 </div>
                             </section>
@@ -102,18 +102,26 @@
                                         <span class="badge text-bg-{{ stream.push.runner_badge }}" data-push-runner-badge>Runner: {{ stream.push.runner_state }}</span>
                                     </div>
                                 </form>
-                                <div class="row g-2 mt-2">
-                                    <div class="col-md-4 col-6"><p>Enabled:</p><strong data-push-enabled>{% if stream.push.enabled %}Yes{% else %}No{% endif %}</strong></div>
-                                    <div class="col-md-4 col-6"><p>Source Key:</p><strong data-push-source-key>{{ stream.push.source_player_key|default:'-' }}</strong></div>
-                                    <div class="col-md-4 col-12"><p>Last Update:</p><strong data-push-updated>{% if stream.push.runner_updated_at %}{{ stream.push.runner_updated_at }}{% else %}-{% endif %}</strong></div>
-                                    <div class="col-md-6 col-6"><p>Source Ingest:</p><strong data-push-source-bitrate>0 kbps</strong></div>
-                                    <div class="col-md-6 col-6"><p>Relay Output:</p><strong data-push-relay-bitrate>{{ stream.push.relay_bitrate_kbps|default:0 }} kbps</strong></div>
-                                    <div class="col-md-4 col-6"><p>Relay Uptime:</p><strong data-push-relay-uptime>{{ stream.push.relay_uptime_seconds|default:0 }}s</strong></div>
-                                    <div class="col-md-4 col-6"><p>Retry In:</p><strong data-push-retry>{{ stream.push.retry_in_seconds|default:0 }}s</strong></div>
-                                    <div class="col-md-4 col-12"><p>Last Exit:</p><strong data-push-exit>{% if stream.push.last_exit_code or stream.push.last_exit_code == 0 %}{{ stream.push.last_exit_code }}{% else %}-{% endif %}</strong></div>
-                                    <div class="col-12"><p>Destination:</p><strong data-push-destination>{{ stream.push.destination_url|default:'-' }}</strong></div>
+                                <div class="opn-stats-slab opn-stats-slab-compact mt-2">
+                                    <div class="opn-metric-grid">
+                                        <div class="opn-metric"><span class="opn-metric-label">Enabled</span><strong data-push-enabled>{% if stream.push.enabled %}Yes{% else %}No{% endif %}</strong></div>
+                                        <div class="opn-metric"><span class="opn-metric-label">Runner</span><strong data-push-runner-state>{{ stream.push.runner_state|default:'unknown' }}</strong></div>
+                                        <div class="opn-metric"><span class="opn-metric-label">Source Ingest</span><strong data-push-source-bitrate>0 kbps</strong></div>
+                                        <div class="opn-metric"><span class="opn-metric-label">Relay Output</span><strong data-push-relay-bitrate>{{ stream.push.relay_bitrate_kbps|default:0 }} kbps</strong></div>
+                                        <div class="opn-metric"><span class="opn-metric-label">Relay Uptime</span><strong data-push-relay-uptime>{{ stream.push.relay_uptime_seconds|default:0 }}s</strong></div>
+                                        <div class="opn-metric"><span class="opn-metric-label">Retry In</span><strong data-push-retry>{{ stream.push.retry_in_seconds|default:0 }}s</strong></div>
+                                    </div>
+                                    <details class="opn-stats-details mt-2">
+                                        <summary>More details</summary>
+                                        <div class="opn-metric-grid mt-2">
+                                            <div class="opn-metric"><span class="opn-metric-label">Source Key</span><strong data-push-source-key>{{ stream.push.source_player_key|default:'-' }}</strong></div>
+                                            <div class="opn-metric"><span class="opn-metric-label">Last Update</span><strong data-push-updated>{% if stream.push.runner_updated_at %}{{ stream.push.runner_updated_at }}{% else %}-{% endif %}</strong></div>
+                                            <div class="opn-metric"><span class="opn-metric-label">Last Exit</span><strong data-push-exit>{% if stream.push.last_exit_code or stream.push.last_exit_code == 0 %}{{ stream.push.last_exit_code }}{% else %}-{% endif %}</strong></div>
+                                            <div class="opn-metric opn-metric-wide"><span class="opn-metric-label">Destination</span><strong data-push-destination>{{ stream.push.destination_url|default:'-' }}</strong></div>
+                                        </div>
+                                    </details>
                                 </div>
-                                <div class="alert mt-2 mb-0 py-1 px-2 {% if stream.push.runner_state == 'error' or stream.push.runner_state == 'retrying' %}alert-danger{% elif stream.push.runner_state == 'running' %}alert-success{% else %}alert-secondary{% endif %}" data-push-last-error>
+                                <div class="alert mt-2 mb-0 py-1 px-2 opn-push-summary {% if stream.push.runner_state == 'error' or stream.push.runner_state == 'retrying' %}alert-danger{% elif stream.push.runner_state == 'running' %}alert-success{% else %}alert-secondary{% endif %}" data-push-last-error>
                                     {{ stream.push.last_error|default:'status unavailable' }}
                                 </div>
                             </section>

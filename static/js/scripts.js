@@ -260,6 +260,16 @@ function formatTimestamp(isoText) {
     return date.toLocaleString();
 }
 
+function setTextIfChanged(element, value) {
+    if (!element) {
+        return;
+    }
+    const next = String(value);
+    if (element.textContent !== next) {
+        element.textContent = next;
+    }
+}
+
 function extractConsumerConnections(data) {
     const found = [];
     let sawConsumerContainer = false;
@@ -339,19 +349,120 @@ function renderStreamStatsCard(collapseEl, payload) {
     const droppedPkts = numericValue(publisher.dropped_pkts);
     const uptime = formatUptime(numericValue(publisher.uptime));
     const status = (payload.status || 'unknown').toUpperCase();
+    const recvRate = numericValue(publisher.mbps_recv_rate);
 
     container.innerHTML = `
-        <div class="row g-2">
-            <div class="col-md-4 col-6"><p>Bitrate:</p><strong>${bitrate} kbps</strong></div>
-            <div class="col-md-4 col-6"><p>Latency:</p><strong>${latency} ms</strong></div>
-            <div class="col-md-4 col-6"><p>RTT:</p><strong>${rtt} ms</strong></div>
-            <div class="col-md-4 col-6"><p>Buffer:</p><strong>${buffer} ms</strong></div>
-            <div class="col-md-4 col-6"><p>Dropped:</p><strong>${droppedPkts}</strong></div>
-            <div class="col-md-4 col-6"><p>Uptime:</p><strong>${uptime}</strong></div>
-            <div class="col-md-6 col-6"><p>Status:</p><strong>${status}</strong></div>
-            <div class="col-md-6 col-6"><p>Source:</p><strong>${picked.source}</strong></div>
+        <div class="opn-metric-grid">
+            <div class="opn-metric"><span class="opn-metric-label">Status</span><strong>${status}</strong></div>
+            <div class="opn-metric"><span class="opn-metric-label">Bitrate</span><strong>${bitrate} kbps</strong></div>
+            <div class="opn-metric"><span class="opn-metric-label">Latency</span><strong>${latency} ms</strong></div>
+            <div class="opn-metric"><span class="opn-metric-label">RTT</span><strong>${rtt} ms</strong></div>
+            <div class="opn-metric"><span class="opn-metric-label">Buffer</span><strong>${buffer} ms</strong></div>
+            <div class="opn-metric"><span class="opn-metric-label">Dropped</span><strong>${droppedPkts}</strong></div>
         </div>
+        <details class="opn-stats-details mt-2">
+            <summary>More details</summary>
+            <div class="opn-metric-grid mt-2">
+                <div class="opn-metric"><span class="opn-metric-label">Uptime</span><strong>${uptime}</strong></div>
+                <div class="opn-metric"><span class="opn-metric-label">Recv Rate</span><strong>${recvRate.toFixed(2)} Mbps</strong></div>
+                <div class="opn-metric"><span class="opn-metric-label">Source Shape</span><strong>${picked.source}</strong></div>
+            </div>
+        </details>
     `;
+}
+
+function syncPushSummaryClass(alertEl, runnerState) {
+    if (!alertEl) {
+        return;
+    }
+    alertEl.classList.remove('alert-danger', 'alert-secondary', 'alert-success');
+    if (runnerState === 'error' || runnerState === 'retrying') {
+        alertEl.classList.add('alert-danger');
+    } else if (runnerState === 'running') {
+        alertEl.classList.add('alert-success');
+    } else {
+        alertEl.classList.add('alert-secondary');
+    }
+}
+
+function updatePushCardMetrics(statusCard, route) {
+    const enabledEl = statusCard.querySelector('[data-push-enabled]');
+    setTextIfChanged(enabledEl, route.enabled ? 'Yes' : 'No');
+
+    const runnerStateEl = statusCard.querySelector('[data-push-runner-state]');
+    setTextIfChanged(runnerStateEl, route.runner_state || 'unknown');
+
+    const sourceEl = statusCard.querySelector('[data-push-source-key]');
+    setTextIfChanged(sourceEl, (route.source_player_key || '-').trim() || '-');
+
+    const destinationEl = statusCard.querySelector('[data-push-destination]');
+    setTextIfChanged(destinationEl, (route.destination_url || '-').trim() || '-');
+
+    const updatedEl = statusCard.querySelector('[data-push-updated]');
+    setTextIfChanged(updatedEl, formatTimestamp(route.runner_updated_at));
+
+    const relayRateEl = statusCard.querySelector('[data-push-relay-bitrate]');
+    setTextIfChanged(relayRateEl, `${numericValue(route.relay_bitrate_kbps)} kbps`);
+
+    const uptimeEl = statusCard.querySelector('[data-push-relay-uptime]');
+    setTextIfChanged(uptimeEl, formatSeconds(route.relay_uptime_seconds));
+
+    const retryEl = statusCard.querySelector('[data-push-retry]');
+    setTextIfChanged(retryEl, formatSeconds(route.retry_in_seconds));
+
+    const exitEl = statusCard.querySelector('[data-push-exit]');
+    setTextIfChanged(exitEl, route.last_exit_code === null || route.last_exit_code === undefined ? '-' : String(route.last_exit_code));
+}
+
+function updatePushSummaryMessage(statusCard, route) {
+    const errEl = statusCard.querySelector('[data-push-last-error]');
+    if (!errEl) {
+        return;
+    }
+    const errorText = (route.last_error || '').trim();
+    const displayText = errorText || 'status unavailable';
+    setTextIfChanged(errEl, displayText);
+    syncPushSummaryClass(errEl, route.runner_state);
+}
+
+function updatePushBadge(statusCard, route) {
+    const badgeEl = statusCard.querySelector('[data-push-runner-badge]');
+    if (!badgeEl) {
+        return;
+    }
+    const nextText = `Runner: ${route.runner_state || 'unknown'}`;
+    setTextIfChanged(badgeEl, nextText);
+    badgeEl.className = `badge text-bg-${route.runner_badge || 'warning'}`;
+}
+
+function updatePushToggleButton(form, route) {
+    const toggleBtn = form.querySelector('[data-push-toggle-btn]');
+    if (!toggleBtn) {
+        return;
+    }
+    const enabled = !!route.enabled;
+    const nextLabel = enabled ? 'Disable push' : 'Enable push';
+    setTextIfChanged(toggleBtn, nextLabel);
+    toggleBtn.classList.remove('btn-warning', 'btn-opn-primary', 'btn-primary');
+    toggleBtn.classList.add(enabled ? 'btn-warning' : 'btn-opn-primary');
+}
+
+function updatePushRouteCard(route) {
+    if (!route || !route.publisher) {
+        return;
+    }
+
+    const selectorValue = getPublisherSelectorValue(route.publisher);
+    const form = document.querySelector(`form[data-push-publisher="${selectorValue}"]`);
+    const statusCard = document.querySelector(`[data-push-status-card][data-publisher="${selectorValue}"]`);
+    if (!form || !statusCard) {
+        return;
+    }
+
+    updatePushBadge(statusCard, route);
+    updatePushSummaryMessage(statusCard, route);
+    updatePushToggleButton(form, route);
+    updatePushCardMetrics(statusCard, route);
 }
 
 function updatePushSourceBitrate(collapseEl, payload) {
@@ -586,95 +697,6 @@ function visiblePushForms() {
     return Array.from(document.querySelectorAll('.accordion-collapse.show form[data-push-publisher]'));
 }
 
-function updatePushRouteCard(route) {
-    if (!route || !route.publisher) {
-        return;
-    }
-
-    const selectorValue = getPublisherSelectorValue(route.publisher);
-    const form = document.querySelector(`form[data-push-publisher="${selectorValue}"]`);
-    const statusCard = document.querySelector(`[data-push-status-card][data-publisher="${selectorValue}"]`);
-    if (!form || !statusCard) {
-        return;
-    }
-
-    const badgeEl = statusCard.querySelector('[data-push-runner-badge]');
-    if (badgeEl) {
-        const nextText = `Runner: ${route.runner_state || 'unknown'}`;
-        if (badgeEl.textContent.trim() !== nextText) {
-            badgeEl.textContent = nextText;
-        }
-        badgeEl.className = `badge text-bg-${route.runner_badge || 'warning'}`;
-    }
-
-    const errEl = statusCard.querySelector('[data-push-last-error]');
-    if (errEl) {
-        const errorText = (route.last_error || '').trim();
-        const displayText = errorText || 'status unavailable';
-        if (errEl.textContent !== displayText) {
-            errEl.textContent = displayText;
-        }
-        errEl.classList.remove('alert-danger', 'alert-secondary', 'alert-success');
-        if (route.runner_state === 'error' || route.runner_state === 'retrying') {
-            errEl.classList.add('alert-danger');
-        } else if (route.runner_state === 'running') {
-            errEl.classList.add('alert-success');
-        } else {
-            errEl.classList.add('alert-secondary');
-        }
-    }
-
-    const toggleBtn = form.querySelector('[data-push-toggle-btn]');
-    if (toggleBtn) {
-        const enabled = !!route.enabled;
-        const nextLabel = enabled ? 'Disable push' : 'Enable push';
-        if (toggleBtn.textContent.trim() !== nextLabel) {
-            toggleBtn.textContent = nextLabel;
-        }
-        toggleBtn.classList.remove('btn-warning', 'btn-opn-primary', 'btn-primary');
-        toggleBtn.classList.add(enabled ? 'btn-warning' : 'btn-opn-primary');
-    }
-
-    const enabledEl = statusCard.querySelector('[data-push-enabled]');
-    if (enabledEl) {
-        enabledEl.textContent = route.enabled ? 'Yes' : 'No';
-    }
-
-    const sourceEl = statusCard.querySelector('[data-push-source-key]');
-    if (sourceEl) {
-        sourceEl.textContent = (route.source_player_key || '-').trim() || '-';
-    }
-
-    const destinationEl = statusCard.querySelector('[data-push-destination]');
-    if (destinationEl) {
-        destinationEl.textContent = (route.destination_url || '-').trim() || '-';
-    }
-
-    const updatedEl = statusCard.querySelector('[data-push-updated]');
-    if (updatedEl) {
-        updatedEl.textContent = formatTimestamp(route.runner_updated_at);
-    }
-
-    const relayRateEl = statusCard.querySelector('[data-push-relay-bitrate]');
-    if (relayRateEl) {
-        relayRateEl.textContent = `${numericValue(route.relay_bitrate_kbps)} kbps`;
-    }
-
-    const uptimeEl = statusCard.querySelector('[data-push-relay-uptime]');
-    if (uptimeEl) {
-        uptimeEl.textContent = formatSeconds(route.relay_uptime_seconds);
-    }
-
-    const retryEl = statusCard.querySelector('[data-push-retry]');
-    if (retryEl) {
-        retryEl.textContent = formatSeconds(route.retry_in_seconds);
-    }
-
-    const exitEl = statusCard.querySelector('[data-push-exit]');
-    if (exitEl) {
-        exitEl.textContent = route.last_exit_code === null || route.last_exit_code === undefined ? '-' : String(route.last_exit_code);
-    }
-}
 
 function pollPushRouteStatus() {
     const activePublishers = new Set(visiblePushForms().map(form => form.dataset.pushPublisher));
