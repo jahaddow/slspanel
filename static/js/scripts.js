@@ -139,6 +139,9 @@ function consumerHintKey(key) {
 }
 
 function normalizeEndpoint(raw) {
+    if (typeof raw === 'string' && raw.trim()) {
+        return raw.trim();
+    }
     const endpoint = raw.endpoint || raw.address || raw.remote || raw.peer || raw.client;
     if (typeof endpoint === 'string' && endpoint.trim()) {
         return endpoint.trim();
@@ -179,10 +182,25 @@ function looksLikeConsumerConnection(raw, hinted) {
     if (identity && metricsPresent) {
         return true;
     }
-    return Boolean(hinted && metricsPresent);
+    return Boolean(hinted && identity);
 }
 
 function normalizeConsumerConnection(raw, index) {
+    if (typeof raw === 'string') {
+        return {
+            id: `conn-${index + 1}`,
+            endpoint: normalizeEndpoint(raw) || 'unknown endpoint',
+            latency: null,
+            rtt: null,
+            bitrate: null,
+            recvRate: null,
+            buffer: null,
+            dropped: null,
+            uptime: null,
+            status: 'connected'
+        };
+    }
+
     const connectionId = raw.connection_id || raw.socket_id || raw.client_id || raw.id || `conn-${index + 1}`;
     const endpoint = normalizeEndpoint(raw);
     return {
@@ -202,6 +220,7 @@ function normalizeConsumerConnection(raw, index) {
 function extractConsumerConnections(data) {
     const found = [];
     let sawConsumerContainer = false;
+    let hintedCount = null;
     const seen = new Set();
 
     function walk(node, path) {
@@ -218,6 +237,13 @@ function extractConsumerConnections(data) {
             sawConsumerContainer = true;
         }
 
+        if (hinted && typeof node.connected === 'number' && Number.isFinite(node.connected)) {
+            hintedCount = node.connected;
+        }
+        if (hinted && typeof node.count === 'number' && Number.isFinite(node.count)) {
+            hintedCount = node.count;
+        }
+
         if (looksLikeConsumerConnection(node, hinted)) {
             const signature = JSON.stringify(node);
             if (!seen.has(signature)) {
@@ -230,6 +256,9 @@ function extractConsumerConnections(data) {
             if (consumerHintKey(key) && (Array.isArray(value) || (value && typeof value === 'object'))) {
                 sawConsumerContainer = true;
             }
+            if (consumerHintKey(key) && typeof value === 'number' && Number.isFinite(value) && /(count|connected|total|active)/i.test(key)) {
+                hintedCount = value;
+            }
             walk(value, path.concat(key));
         });
     }
@@ -237,7 +266,8 @@ function extractConsumerConnections(data) {
     walk(data, []);
     return {
         connections: found.map((raw, idx) => normalizeConsumerConnection(raw, idx)),
-        sawConsumerContainer
+        sawConsumerContainer,
+        hintedCount
     };
 }
 
@@ -296,9 +326,13 @@ function renderConsumerList(container, payload) {
 
     if (connections.length === 0) {
         if (extracted.sawConsumerContainer) {
-            container.innerHTML = '<p class="opn-muted"><em>No consumers currently connected.</em></p>';
+            if (typeof extracted.hintedCount === 'number' && extracted.hintedCount > 0) {
+                container.innerHTML = '<p class="opn-muted"><em>Consumer count is reported, but per-connection details are unavailable in this payload.</em></p>';
+            } else {
+                container.innerHTML = '<p class="opn-muted"><em>No consumers currently connected.</em></p>';
+            }
         } else {
-            container.innerHTML = '<p class="opn-muted"><em>Consumer details are not present in this stats payload.</em></p>';
+            container.innerHTML = '<p class="opn-muted"><em>This SLS stats response only contains publisher metrics for this stream (no consumer connection list).</em></p>';
         }
         return;
     }
