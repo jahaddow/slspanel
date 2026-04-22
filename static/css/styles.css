@@ -203,6 +203,11 @@ body.opn-app {
     letter-spacing: 0.05em;
 }
 
+.opn-live-badge {
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+}
+
 .opn-divider {
     color: var(--opn-muted);
 }

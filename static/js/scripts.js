@@ -10,6 +10,7 @@ const PENDING_SCROLL_Y_KEY = 'slspanel.pendingScrollY';
 const PENDING_SCROLL_TS_KEY = 'slspanel.pendingScrollTs';
 const PUSH_STATUS_POLL_MS = 2000;
 const STATS_POLL_MS = 2000;
+const STREAM_HEADER_STATUS_POLL_MS = 4000;
 const LAYOUT_SAVE_DEBOUNCE_MS = 400;
 const SCROLL_RESTORE_MAX_AGE_MS = 60000;
 
@@ -135,6 +136,15 @@ function pickActivePublisherMetrics(data) {
         }
     }
     return null;
+}
+
+function isPublisherCurrentlyOnline(payload) {
+    const picked = pickActivePublisherMetrics(payload);
+    if (!picked || !picked.metrics) {
+        return false;
+    }
+    const metrics = picked.metrics;
+    return numericValue(metrics.bitrate) > 0 || numericValue(metrics.mbps_recv_rate) > 0;
 }
 
 function formatUptime(seconds) {
@@ -623,6 +633,49 @@ function fetchConsumerStats(playerKey) {
         .catch(() => ({ error: true }));
 }
 
+function updateStreamLiveBadgeElement(badgeEl, isOnline) {
+    if (!badgeEl) {
+        return;
+    }
+    setTextIfChanged(badgeEl, isOnline ? 'Online' : 'Offline');
+    badgeEl.classList.remove('text-bg-success', 'text-bg-secondary');
+    badgeEl.classList.add(isOnline ? 'text-bg-success' : 'text-bg-secondary');
+}
+
+function refreshStreamHeaderStatuses() {
+    const badges = Array.from(document.querySelectorAll('[data-stream-live-badge][data-publisher]'));
+    if (badges.length === 0) {
+        return;
+    }
+    const publishers = Array.from(new Set(badges.map(badge => badge.dataset.publisher).filter(Boolean)));
+    if (publishers.length === 0) {
+        return;
+    }
+
+    Promise.all(
+        publishers.map(publisher => fetchPublisherStats(publisher).then(payload => ({ publisher, payload })))
+    ).then(results => {
+        const statusMap = new Map();
+        results.forEach(({ publisher, payload }) => {
+            statusMap.set(publisher, isPublisherCurrentlyOnline(payload));
+        });
+        badges.forEach(badge => {
+            updateStreamLiveBadgeElement(badge, !!statusMap.get(badge.dataset.publisher));
+        });
+    }).catch(() => {
+        badges.forEach(badge => updateStreamLiveBadgeElement(badge, false));
+    });
+}
+
+function initializeStreamHeaderStatusPolling() {
+    const badges = document.querySelectorAll('[data-stream-live-badge][data-publisher]');
+    if (badges.length === 0) {
+        return;
+    }
+    refreshStreamHeaderStatuses();
+    setInterval(refreshStreamHeaderStatuses, STREAM_HEADER_STATUS_POLL_MS);
+}
+
 function updateStatsForCollapse(collapseEl) {
     const playerContainers = Array.from(collapseEl.querySelectorAll('[data-player-consumers][data-player-key]'));
     const playerKeys = Array.from(new Set(playerContainers.map(el => el.dataset.playerKey).filter(Boolean)));
@@ -940,5 +993,6 @@ document.addEventListener('DOMContentLoaded', function () {
     restorePendingScrollState();
     initializeStats();
     initializePushStatusPolling();
+    initializeStreamHeaderStatusPolling();
     initializeStreamLayoutDnD();
 });

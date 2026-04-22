@@ -38,6 +38,7 @@
                                 <div class="opn-stream-header">
                                     <span class="opn-pill">Publisher</span>
                                     <span class="blur-text" tabindex="0" role="button" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)" data-url="{{ stream.publisher }}">{{ stream.publisher }}</span>
+                                    <span class="badge text-bg-secondary opn-live-badge" data-stream-live-badge data-publisher="{{ stream.publisher }}">Offline</span>
                                     <span class="copy-feedback"></span>
                                     {% if stream.main_description %}
                                     <span class="opn-divider">|</span>
