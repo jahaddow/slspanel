@@ -5,6 +5,7 @@ function generateKey(prefix, bytes) {
 }
 
 const ACTIVE_STREAM_KEY = 'slspanel.activeStreamPublisher';
+const GROUP_COLLAPSE_KEY = 'slspanel.collapsedGroups';
 const PUSH_STATUS_POLL_MS = 2000;
 const STATS_POLL_MS = 2000;
 const LAYOUT_SAVE_DEBOUNCE_MS = 400;
@@ -141,6 +142,14 @@ function formatUptime(seconds) {
     const secs = seconds % 60;
     const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     return days > 0 ? `${days}d ${time}` : time;
+}
+
+function formatSeconds(seconds) {
+    const value = numericValue(seconds);
+    if (value <= 0) {
+        return '0s';
+    }
+    return `${Math.round(value)}s`;
 }
 
 function consumerHintKey(key) {
@@ -345,6 +354,22 @@ function renderStreamStatsCard(collapseEl, payload) {
     `;
 }
 
+function updatePushSourceBitrate(collapseEl, payload) {
+    const bitrateEl = collapseEl.querySelector('[data-push-source-bitrate]');
+    if (!bitrateEl) {
+        return;
+    }
+
+    const picked = pickActivePublisherMetrics(payload);
+    if (!picked) {
+        bitrateEl.textContent = '0 kbps';
+        return;
+    }
+
+    const bitrate = numericValue(picked.metrics.bitrate);
+    bitrateEl.textContent = `${bitrate} kbps`;
+}
+
 function renderConsumerList(container, payload) {
     if (!container) {
         return;
@@ -474,6 +499,7 @@ function updateStatsForCollapse(collapseEl) {
         });
 
         renderStreamStatsCard(collapseEl, publisherPayload);
+        updatePushSourceBitrate(collapseEl, publisherPayload);
         playerContainers.forEach(container => {
             const key = container.dataset.playerKey;
             renderConsumerList(container, consumerMap.get(key));
@@ -567,12 +593,12 @@ function updatePushRouteCard(route) {
 
     const selectorValue = getPublisherSelectorValue(route.publisher);
     const form = document.querySelector(`form[data-push-publisher="${selectorValue}"]`);
-    if (!form) {
+    const statusCard = document.querySelector(`[data-push-status-card][data-publisher="${selectorValue}"]`);
+    if (!form || !statusCard) {
         return;
     }
 
-    const statusCard = document.querySelector(`[data-push-status-card][data-publisher="${selectorValue}"]`);
-    const badgeEl = statusCard ? statusCard.querySelector('[data-push-runner-badge]') : form.querySelector('[data-push-runner-badge]');
+    const badgeEl = statusCard.querySelector('[data-push-runner-badge]');
     if (badgeEl) {
         const nextText = `Runner: ${route.runner_state || 'unknown'}`;
         if (badgeEl.textContent.trim() !== nextText) {
@@ -581,7 +607,7 @@ function updatePushRouteCard(route) {
         badgeEl.className = `badge text-bg-${route.runner_badge || 'warning'}`;
     }
 
-    const errEl = statusCard ? statusCard.querySelector('[data-push-last-error]') : form.querySelector('[data-push-last-error]');
+    const errEl = statusCard.querySelector('[data-push-last-error]');
     if (errEl) {
         const errorText = (route.last_error || '').trim();
         const displayText = errorText || 'status unavailable';
@@ -609,19 +635,44 @@ function updatePushRouteCard(route) {
         toggleBtn.classList.add(enabled ? 'btn-warning' : 'btn-opn-primary');
     }
 
-    if (statusCard) {
-        const enabledEl = statusCard.querySelector('[data-push-enabled]');
-        if (enabledEl) {
-            enabledEl.textContent = route.enabled ? 'Yes' : 'No';
-        }
-        const destinationEl = statusCard.querySelector('[data-push-destination]');
-        if (destinationEl) {
-            destinationEl.textContent = (route.destination_url || '-').trim() || '-';
-        }
-        const updatedEl = statusCard.querySelector('[data-push-updated]');
-        if (updatedEl) {
-            updatedEl.textContent = formatTimestamp(route.runner_updated_at);
-        }
+    const enabledEl = statusCard.querySelector('[data-push-enabled]');
+    if (enabledEl) {
+        enabledEl.textContent = route.enabled ? 'Yes' : 'No';
+    }
+
+    const sourceEl = statusCard.querySelector('[data-push-source-key]');
+    if (sourceEl) {
+        sourceEl.textContent = (route.source_player_key || '-').trim() || '-';
+    }
+
+    const destinationEl = statusCard.querySelector('[data-push-destination]');
+    if (destinationEl) {
+        destinationEl.textContent = (route.destination_url || '-').trim() || '-';
+    }
+
+    const updatedEl = statusCard.querySelector('[data-push-updated]');
+    if (updatedEl) {
+        updatedEl.textContent = formatTimestamp(route.runner_updated_at);
+    }
+
+    const relayRateEl = statusCard.querySelector('[data-push-relay-bitrate]');
+    if (relayRateEl) {
+        relayRateEl.textContent = `${numericValue(route.relay_bitrate_kbps)} kbps`;
+    }
+
+    const uptimeEl = statusCard.querySelector('[data-push-relay-uptime]');
+    if (uptimeEl) {
+        uptimeEl.textContent = formatSeconds(route.relay_uptime_seconds);
+    }
+
+    const retryEl = statusCard.querySelector('[data-push-retry]');
+    if (retryEl) {
+        retryEl.textContent = formatSeconds(route.retry_in_seconds);
+    }
+
+    const exitEl = statusCard.querySelector('[data-push-exit]');
+    if (exitEl) {
+        exitEl.textContent = route.last_exit_code === null || route.last_exit_code === undefined ? '-' : String(route.last_exit_code);
     }
 }
 
@@ -660,6 +711,40 @@ function initializePushStatusPolling() {
     }
     pollPushRouteStatus();
     setInterval(pollPushRouteStatus, PUSH_STATUS_POLL_MS);
+}
+
+function initializeGroupCollapseState() {
+    const groups = Array.from(document.querySelectorAll('[data-group-collapse][data-group-key]'));
+    if (groups.length === 0 || !window.bootstrap || !window.bootstrap.Collapse) {
+        return;
+    }
+
+    let collapsedKeys = {};
+    try {
+        collapsedKeys = JSON.parse(localStorage.getItem(GROUP_COLLAPSE_KEY) || '{}') || {};
+    } catch (_err) {
+        collapsedKeys = {};
+    }
+
+    groups.forEach(groupEl => {
+        const key = groupEl.dataset.groupKey || '__ungrouped__';
+        const shouldCollapse = !!collapsedKeys[key];
+        const collapse = window.bootstrap.Collapse.getOrCreateInstance(groupEl, { toggle: false });
+        if (shouldCollapse) {
+            collapse.hide();
+        } else {
+            collapse.show();
+        }
+
+        groupEl.addEventListener('shown.bs.collapse', () => {
+            collapsedKeys[key] = false;
+            localStorage.setItem(GROUP_COLLAPSE_KEY, JSON.stringify(collapsedKeys));
+        });
+        groupEl.addEventListener('hidden.bs.collapse', () => {
+            collapsedKeys[key] = true;
+            localStorage.setItem(GROUP_COLLAPSE_KEY, JSON.stringify(collapsedKeys));
+        });
+    });
 }
 
 function readLayoutPayload() {
@@ -770,6 +855,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (playerInput && !playerInput.value) {
         playerInput.value = generateKey('play_', 16);
     }
+    initializeGroupCollapseState();
     initializeAccordionState();
     initializeStats();
     initializePushStatusPolling();

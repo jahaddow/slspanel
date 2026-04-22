@@ -89,6 +89,43 @@ body.opn-app {
     font-size: 1.05rem;
 }
 
+.opn-stream-headline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.opn-stream-headline .accordion-button {
+    flex: 1 1 auto;
+}
+
+.opn-group-edit-inline {
+    position: relative;
+    margin-right: 0.6rem;
+}
+
+.opn-group-edit-inline > summary {
+    list-style: none;
+}
+
+.opn-group-edit-inline > summary::-webkit-details-marker {
+    display: none;
+}
+
+.opn-group-edit-form {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 20;
+    display: flex;
+    gap: 0.4rem;
+    min-width: 260px;
+    padding: 0.5rem;
+    border: 1px solid var(--opn-border);
+    border-radius: 8px;
+    background: var(--opn-surface);
+}
+
 .btn-opn-primary {
     background: var(--opn-primary);
     border: none;

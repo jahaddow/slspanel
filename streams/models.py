@@ -10,10 +10,15 @@ class Configuration(models.Model):
 
 class PushRoute(models.Model):
     publisher = models.CharField(max_length=255, unique=True)
+    source_player_key = models.CharField(max_length=255, blank=True, default='')
     destination_url = models.CharField(max_length=1024, blank=True, default='')
     enabled = models.BooleanField(default=False)
     runner_state = models.CharField(max_length=32, default='stopped')
     last_error = models.TextField(blank=True, default='')
+    relay_bitrate_kbps = models.FloatField(default=0)
+    relay_uptime_seconds = models.IntegerField(default=0)
+    retry_in_seconds = models.IntegerField(default=0)
+    last_exit_code = models.IntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     runner_updated_at = models.DateTimeField(null=True, blank=True)
 

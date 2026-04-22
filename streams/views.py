@@ -17,6 +17,8 @@ from .models import PushControlToken, PushRoute, StreamMeta
 
 API_URL = settings.SLS_API_URL if hasattr(settings, 'SLS_API_URL') else 'http://localhost:8789'
 API_KEY = settings.SLS_API_KEY if hasattr(settings, 'SLS_API_KEY') else ''
+INTERNAL_PUSH_PLAYER_PREFIX = "__pushsrc_"
+INTERNAL_PUSH_PLAYER_DESC = "[internal push source]"
 
 
 def conditional_login_required(view_func):
@@ -138,7 +140,7 @@ def map_publishers(entries):
         if pub not in publisher_map:
             publisher_map[pub] = {"publisher": pub, "player": [], "description": ""}
 
-        if player:
+        if player and not player.startswith(INTERNAL_PUSH_PLAYER_PREFIX):
             player_obj = {"key": player, "description": desc}
             if player_obj not in publisher_map[pub]["player"]:
                 publisher_map[pub]["player"].append(player_obj)
@@ -195,6 +197,53 @@ def build_stream_groups(streams):
             'streams': grouped[key],
         })
     return groups
+
+
+def build_hidden_push_player_key(publisher):
+    digest = hashlib.sha1(publisher.encode("utf-8")).hexdigest()[:20]
+    return f"{INTERNAL_PUSH_PLAYER_PREFIX}{digest}"
+
+
+def ensure_hidden_push_source(route, entries=None):
+    if entries is None:
+        entries = get_stream_entries()
+
+    source_key = route.source_player_key.strip() if route.source_player_key else ""
+    if not source_key:
+        source_key = build_hidden_push_player_key(route.publisher)
+
+    for entry in entries:
+        if entry.get("publisher") == route.publisher and entry.get("player") == source_key:
+            if route.source_player_key != source_key:
+                route.source_player_key = source_key
+                route.save(update_fields=["source_player_key", "updated_at"])
+            return source_key, entries
+
+    create_payload = {
+        "publisher": route.publisher,
+        "player": source_key,
+        "description": INTERNAL_PUSH_PLAYER_DESC,
+    }
+    code, _res = call_api("POST", "/api/stream-ids", create_payload)
+    if code and 200 <= code < 300:
+        route.source_player_key = source_key
+        route.save(update_fields=["source_player_key", "updated_at"])
+        return source_key, get_stream_entries()
+
+    refreshed_entries = get_stream_entries()
+    for entry in refreshed_entries:
+        if entry.get("publisher") == route.publisher and entry.get("player") == source_key:
+            route.source_player_key = source_key
+            route.save(update_fields=["source_player_key", "updated_at"])
+            return source_key, refreshed_entries
+
+    for entry in entries:
+        if entry.get("publisher") == route.publisher and entry.get("player") == source_key:
+            route.source_player_key = source_key
+            route.save(update_fields=["source_player_key", "updated_at"])
+            return source_key, entries
+
+    return "", entries
 
 
 def push_state_badge(state):
@@ -260,6 +309,11 @@ def summarize_state(route, publisher):
         "runner_badge": push_state_badge(route.runner_state),
         "summary": summary,
         "destination_url": route.destination_url,
+        "source_player_key": route.source_player_key,
+        "relay_bitrate_kbps": route.relay_bitrate_kbps,
+        "relay_uptime_seconds": route.relay_uptime_seconds,
+        "retry_in_seconds": route.retry_in_seconds,
+        "last_exit_code": route.last_exit_code,
         "runner_updated_at": route.runner_updated_at.isoformat() if route.runner_updated_at else None,
         "timestamp": timezone.now().isoformat(),
     }
@@ -280,21 +334,31 @@ def index(request):
         route = routes_by_publisher.get(stream['publisher'])
         push = {
             'destination_url': '',
+            'source_player_key': '',
             'enabled': False,
             'runner_state': 'stopped',
             'runner_badge': push_state_badge('stopped'),
             'last_error': 'push disabled',
             'token_count': token_count.get(stream['publisher'], 0),
             'new_control_token': request.session.pop(f"control_token_{stream['publisher']}", None),
+            'relay_bitrate_kbps': 0,
+            'relay_uptime_seconds': 0,
+            'retry_in_seconds': 0,
+            'last_exit_code': None,
             'runner_updated_at': None,
         }
         if route is not None:
             push.update({
                 'destination_url': route.destination_url,
+                'source_player_key': route.source_player_key,
                 'enabled': route.enabled,
                 'runner_state': route.runner_state,
                 'runner_badge': push_state_badge(route.runner_state),
                 'last_error': route.last_error or ('relay active' if route.runner_state == 'running' else ''),
+                'relay_bitrate_kbps': route.relay_bitrate_kbps,
+                'relay_uptime_seconds': route.relay_uptime_seconds,
+                'retry_in_seconds': route.retry_in_seconds,
+                'last_exit_code': route.last_exit_code,
                 'runner_updated_at': route.runner_updated_at.isoformat() if route.runner_updated_at else None,
             })
         stream['push'] = push
@@ -353,6 +417,11 @@ def api_push_routes_status(request):
             "runner_badge": push_state_badge(route.runner_state),
             "last_error": state_message,
             "destination_url": route.destination_url,
+            "source_player_key": route.source_player_key,
+            "relay_bitrate_kbps": route.relay_bitrate_kbps,
+            "relay_uptime_seconds": route.relay_uptime_seconds,
+            "retry_in_seconds": route.retry_in_seconds,
+            "last_exit_code": route.last_exit_code,
             "runner_updated_at": route.runner_updated_at.isoformat() if route.runner_updated_at else None,
         })
 
@@ -504,6 +573,8 @@ def delete_stream(request, publisher_key):
 
 @conditional_login_required
 def delete_player(request, player_key):
+    if player_key.startswith(INTERNAL_PUSH_PLAYER_PREFIX):
+        return redirect('streams:index')
     call_api('DELETE', f'/api/stream-ids/{player_key}')
     return redirect('streams:index')
 
@@ -531,8 +602,19 @@ def update_push_route(request, publisher_key):
             route.enabled = False
             route.last_error = 'Set a destination URL before enabling push'
         else:
-            route.enabled = not route.enabled
-            route.last_error = ''
+            next_enabled = not route.enabled
+            if next_enabled:
+                source_key, _entries = ensure_hidden_push_source(route)
+                if not source_key:
+                    route.enabled = False
+                    route.last_error = 'Failed to prepare internal push source player key'
+                else:
+                    route.enabled = True
+                    route.last_error = ''
+            else:
+                route.enabled = False
+                route.last_error = ''
+                route.retry_in_seconds = 0
 
     route.save()
     return redirect('streams:index')
@@ -573,12 +655,18 @@ def internal_push_routes(request):
     if not ok:
         return response
 
+    entries = get_stream_entries()
     routes = []
     for route in PushRoute.objects.all():
+        source_key, entries = ensure_hidden_push_source(route, entries)
+        if route.enabled and not source_key:
+            route.enabled = False
+            route.last_error = "internal push source key is missing"
+            route.save(update_fields=["enabled", "last_error", "updated_at"])
         routes.append({
             'publisher': route.publisher,
-            'player': route.publisher,
-            'source_stream_id': route.publisher,
+            'player': source_key,
+            'source_stream_id': source_key,
             'destination_url': route.destination_url,
             'enabled': route.enabled,
             'runner_state': route.runner_state,
@@ -609,6 +697,19 @@ def internal_push_status(request):
     route, _created = PushRoute.objects.get_or_create(publisher=publisher)
     route.runner_state = payload.get('state', route.runner_state)
     route.last_error = payload.get('last_error', route.last_error)
+    try:
+        route.relay_bitrate_kbps = float(payload.get('relay_bitrate_kbps', route.relay_bitrate_kbps) or 0)
+    except (TypeError, ValueError):
+        route.relay_bitrate_kbps = 0
+    try:
+        route.relay_uptime_seconds = int(payload.get('relay_uptime_seconds', route.relay_uptime_seconds) or 0)
+    except (TypeError, ValueError):
+        route.relay_uptime_seconds = 0
+    try:
+        route.retry_in_seconds = int(payload.get('retry_in_seconds', route.retry_in_seconds) or 0)
+    except (TypeError, ValueError):
+        route.retry_in_seconds = 0
+    route.last_exit_code = payload.get('last_exit_code', route.last_exit_code)
     route.runner_updated_at = timezone.now()
     route.save()
 
@@ -635,6 +736,17 @@ def api_push_enable(request, publisher_key):
             "timestamp": timezone.now().isoformat(),
         }, status=400)
 
+    source_key, _entries = ensure_hidden_push_source(route)
+    if not source_key:
+        return JsonResponse({
+            "ok": False,
+            "publisher": publisher_key,
+            "enabled": False,
+            "runner_state": route.runner_state,
+            "summary": "cannot enable push: internal source key setup failed",
+            "timestamp": timezone.now().isoformat(),
+        }, status=500)
+
     route.enabled = True
     route.last_error = ''
     route.save()
@@ -652,6 +764,7 @@ def api_push_disable(request, publisher_key):
 
     route, _created = PushRoute.objects.get_or_create(publisher=publisher_key)
     route.enabled = False
+    route.retry_in_seconds = 0
     route.save()
     return JsonResponse(summarize_state(route, publisher_key))
 

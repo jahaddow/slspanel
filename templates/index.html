@@ -19,213 +19,195 @@
 
 {% if stream_groups %}
 <div id="streamLayoutRoot" data-layout-endpoint="{% url 'streams:save_stream_layout' %}" data-csrf-token="{{ csrf_token }}">
-    <div class="opn-layout-note">Drag stream cards to reorder and move them between groups. Layout saves automatically.</div>
     {% for group in stream_groups %}
     <section class="opn-group" data-group-name="{{ group.name }}">
         <div class="opn-group-header">
-            <h2>{{ group.label }}</h2>
+            <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#group-body-{{ forloop.counter }}" aria-expanded="true" data-group-toggle data-group-key="{{ group.name|default:'__ungrouped__' }}">
+                {{ group.label }}
+            </button>
             <span class="badge text-bg-secondary">{{ group.streams|length }} stream{{ group.streams|length|pluralize }}</span>
         </div>
 
-        <div class="accordion opn-accordion opn-group-accordion" id="streamAccordion-{{ forloop.counter }}" data-group-accordion>
-            {% for stream in group.streams %}
-            <div class="accordion-item opn-stream-item" data-stream-item data-stream-publisher="{{ stream.publisher }}" draggable="true">
-                <h2 class="accordion-header" id="heading-{{ stream.publisher }}">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#collapse-{{ stream.publisher }}" aria-expanded="false">
-                        <div class="opn-stream-header">
-                            <span class="opn-pill">Publisher</span>
-                            <span class="blur-text" tabindex="0" role="button"
-                                onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)"
-                                data-url="{{ stream.publisher }}">{{ stream.publisher }}</span>
-                            <span class="copy-feedback"></span>
-                            {% if stream.main_description %}
-                            <span class="opn-divider">|</span>
-                            <span class="opn-muted">{{ stream.main_description }}</span>
-                            {% endif %}
+        <div id="group-body-{{ forloop.counter }}" class="collapse show" data-group-collapse data-group-key="{{ group.name|default:'__ungrouped__' }}">
+            <div class="accordion opn-accordion opn-group-accordion" id="streamAccordion-{{ forloop.counter }}" data-group-accordion>
+                {% for stream in group.streams %}
+                <div class="accordion-item opn-stream-item" data-stream-item data-stream-publisher="{{ stream.publisher }}" draggable="true">
+                    <h2 class="accordion-header" id="heading-{{ stream.publisher }}">
+                        <div class="opn-stream-headline">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ stream.publisher }}" aria-expanded="false">
+                                <div class="opn-stream-header">
+                                    <span class="opn-pill">Publisher</span>
+                                    <span class="blur-text" tabindex="0" role="button" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)" data-url="{{ stream.publisher }}">{{ stream.publisher }}</span>
+                                    <span class="copy-feedback"></span>
+                                    {% if stream.main_description %}
+                                    <span class="opn-divider">|</span>
+                                    <span class="opn-muted">{{ stream.main_description }}</span>
+                                    {% endif %}
+                                </div>
+                            </button>
+                            <details class="opn-group-edit-inline">
+                                <summary class="btn btn-outline-light btn-sm">Group</summary>
+                                <form method="post" action="{% url 'streams:update_stream_group' stream.publisher %}" class="stream-action-form opn-group-edit-form" autocomplete="off">
+                                    {% csrf_token %}
+                                    <input class="form-control form-control-sm" name="group_name" value="{{ stream.group_name }}" placeholder="Ungrouped">
+                                    <button type="submit" class="btn btn-sm btn-opn-primary">Save</button>
+                                </form>
+                            </details>
                         </div>
-                    </button>
-                </h2>
-                <div id="collapse-{{ stream.publisher }}" class="accordion-collapse collapse" data-stream-publisher="{{ stream.publisher }}"
-                    data-bs-parent="#streamAccordion-{{ forloop.parentloop.counter }}">
-                    <div class="accordion-body">
-                        <section class="opn-card">
-                            <h5 class="opn-section-title">Stream Layout</h5>
-                            <form method="post" action="{% url 'streams:update_stream_group' stream.publisher %}" class="stream-action-form d-flex gap-2 flex-wrap align-items-end">
-                                {% csrf_token %}
-                                <div>
-                                    <label for="group-{{ stream.publisher }}" class="form-label mb-1">Group</label>
-                                    <input id="group-{{ stream.publisher }}" class="form-control form-control-sm" name="group_name" value="{{ stream.group_name }}" placeholder="Ungrouped">
+                    </h2>
+                    <div id="collapse-{{ stream.publisher }}" class="accordion-collapse collapse" data-stream-publisher="{{ stream.publisher }}" data-bs-parent="#streamAccordion-{{ forloop.parentloop.counter }}">
+                        <div class="accordion-body">
+                            <section class="opn-card">
+                                <h5 class="opn-section-title">Publish URLs</h5>
+                                <div class="opn-url-row">
+                                    <strong>SRT</strong>
+                                    <span class="blur-text" tabindex="0" role="button" data-url="srt://{{ sls_domain_ip }}:{{ srt_publish_port }}?streamid={{ stream.publisher }}" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">srt://{{ sls_domain_ip }}:{{ srt_publish_port }}?streamid={{ stream.publisher }}</span>
+                                    <span class="copy-feedback"></span>
                                 </div>
-                                <button type="submit" class="btn btn-outline-light btn-sm">Save group</button>
-                            </form>
-                        </section>
-
-                        <section class="opn-card">
-                            <h5 class="opn-section-title">Publish URLs</h5>
-                            <div class="opn-url-row">
-                                <strong>SRT</strong>
-                                <span class="blur-text" tabindex="0" role="button"
-                                      data-url="srt://{{ sls_domain_ip }}:{{ srt_publish_port }}?streamid={{ stream.publisher }}"
-                                      onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">srt://{{ sls_domain_ip }}:{{ srt_publish_port }}?streamid={{ stream.publisher }}</span>
-                                <span class="copy-feedback"></span>
-                            </div>
-                            <div class="opn-url-row">
-                                <strong>SRTLA</strong>
-                                <span class="blur-text" tabindex="0" role="button"
-                                      data-url="srtla://{{ sls_domain_ip }}:{{ srtla_publish_port }}?streamid={{ stream.publisher }}"
-                                      onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">srtla://{{ sls_domain_ip }}:{{ srtla_publish_port }}?streamid={{ stream.publisher }}</span>
-                                <span class="copy-feedback"></span>
-                            </div>
-                            <div class="opn-url-row">
-                                <strong>Primary Stats</strong>
-                                <span class="blur-text" tabindex="0" role="button"
-                                      data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}"
-                                      onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}</span>
-                                <span class="copy-feedback"></span>
-                            </div>
-                            <div class="opn-url-row">
-                                <strong>Primary Legacy</strong>
-                                <span class="blur-text" tabindex="0" role="button"
-                                      data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}?legacy=1"
-                                      onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}?legacy=1</span>
-                                <span class="copy-feedback"></span>
-                            </div>
-                        </section>
-
-                        <section class="opn-card">
-                            <h5 class="opn-section-title">Stream Stats</h5>
-                            <div data-stream-stats>
-                                <p class="opn-muted"><em>Expand this stream to load publisher statistics.</em></p>
-                            </div>
-                        </section>
-
-                        <section class="opn-card">
-                            <h5 class="opn-section-title">Push Control</h5>
-                            <form method="post" action="{% url 'streams:update_push_route' stream.publisher %}" class="stream-action-form" data-push-publisher="{{ stream.publisher }}">
-                                {% csrf_token %}
-                                <label for="push-destination-{{ stream.publisher }}" class="form-label">Push destination URL</label>
-                                <input id="push-destination-{{ stream.publisher }}" type="text" class="form-control"
-                                       name="destination_url" value="{{ stream.push.destination_url }}"
-                                       placeholder="srt://... or rtmp(s)://...">
-                                <div class="mt-3 d-flex gap-2 align-items-center flex-wrap">
-                                    <button type="submit" name="action" value="save" class="btn btn-outline-light btn-sm">Save destination</button>
-                                    <button type="submit" name="action" value="toggle" class="btn btn-sm {% if stream.push.enabled %}btn-warning{% else %}btn-opn-primary{% endif %}" data-push-toggle-btn>
-                                        {% if stream.push.enabled %}Disable push{% else %}Enable push{% endif %}
-                                    </button>
+                                <div class="opn-url-row">
+                                    <strong>SRTLA</strong>
+                                    <span class="blur-text" tabindex="0" role="button" data-url="srtla://{{ sls_domain_ip }}:{{ srtla_publish_port }}?streamid={{ stream.publisher }}" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">srtla://{{ sls_domain_ip }}:{{ srtla_publish_port }}?streamid={{ stream.publisher }}</span>
+                                    <span class="copy-feedback"></span>
                                 </div>
-                            </form>
-                        </section>
+                                <div class="opn-url-row">
+                                    <strong>Primary Stats</strong>
+                                    <span class="blur-text" tabindex="0" role="button" data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}</span>
+                                    <span class="copy-feedback"></span>
+                                </div>
+                                <div class="opn-url-row">
+                                    <strong>Primary Legacy</strong>
+                                    <span class="blur-text" tabindex="0" role="button" data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}?legacy=1" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}?legacy=1</span>
+                                    <span class="copy-feedback"></span>
+                                </div>
+                            </section>
 
-                        <section class="opn-card" data-push-status-card data-publisher="{{ stream.publisher }}">
-                            <h5 class="opn-section-title">Push Status</h5>
-                            <div class="row g-2">
-                                <div class="col-md-4 col-6"><p>Enabled:</p><strong data-push-enabled>{% if stream.push.enabled %}Yes{% else %}No{% endif %}</strong></div>
-                                <div class="col-md-4 col-6"><p>Runner State:</p><strong><span class="badge text-bg-{{ stream.push.runner_badge }}" data-push-runner-badge>Runner: {{ stream.push.runner_state }}</span></strong></div>
-                                <div class="col-md-4 col-12"><p>Source Stream:</p><strong>{{ stream.publisher }}</strong></div>
-                                <div class="col-md-12"><p>Destination:</p><strong data-push-destination>{{ stream.push.destination_url|default:'-' }}</strong></div>
-                                <div class="col-md-12"><p>Last Update:</p><strong data-push-updated>{% if stream.push.runner_updated_at %}{{ stream.push.runner_updated_at }}{% else %}-{% endif %}</strong></div>
-                            </div>
-                            <div class="alert mt-2 mb-0 py-1 px-2 {% if stream.push.runner_state == 'error' or stream.push.runner_state == 'retrying' %}alert-danger{% elif stream.push.runner_state == 'running' %}alert-success{% else %}alert-secondary{% endif %}" data-push-last-error>
-                                {{ stream.push.last_error|default:'status unavailable' }}
-                            </div>
-                        </section>
+                            <section class="opn-card">
+                                <h5 class="opn-section-title">Stream Stats</h5>
+                                <div data-stream-stats>
+                                    <p class="opn-muted"><em>Expand this stream to load publisher statistics.</em></p>
+                                </div>
+                            </section>
 
-                        <section class="opn-card">
-                            <h5 class="opn-section-title">Companion Remote Control</h5>
-                            <p class="opn-muted mb-2">Active tokens: {{ stream.push.token_count }} (stream-scoped)</p>
-                            <form method="post" action="{% url 'streams:create_control_token' stream.publisher %}" class="mb-2 d-flex gap-2 align-items-center flex-wrap stream-action-form">
-                                {% csrf_token %}
-                                <input type="text" class="form-control form-control-sm" style="max-width: 260px" name="token_label" placeholder="Token label (optional)">
-                                <button type="submit" class="btn btn-sm btn-outline-info">Create control token</button>
-                            </form>
-                            <form method="post" action="{% url 'streams:revoke_control_tokens' stream.publisher %}" class="stream-action-form">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-outline-danger">Revoke all tokens</button>
-                            </form>
-
-                            {% if stream.push.new_control_token %}
-                            <div class="alert alert-warning py-2 px-2 mt-3 mb-2">
-                                <strong>New control token (shown once):</strong>
-                                <code>{{ stream.push.new_control_token }}</code>
-                            </div>
-                            <div class="small mb-3">
-                                <div><strong>Enable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/enable</code></div>
-                                <div><strong>Disable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/disable</code></div>
-                                <div><strong>Status URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/status</code></div>
-                                <div><strong>Header:</strong> <code>Authorization: Bearer {{ stream.push.new_control_token }}</code></div>
-                                <div><strong>Browser Enable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/enable?token={{ stream.push.new_control_token }}</code></div>
-                                <div><strong>Browser Disable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/disable?token={{ stream.push.new_control_token }}</code></div>
-                                <div><strong>Browser Status URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/status?token={{ stream.push.new_control_token }}</code></div>
-                            </div>
-                            <div class="alert alert-secondary py-2 px-2 mb-0">
-                                Query-string token links are convenient but less secure than Bearer headers. Use header auth where possible.
-                            </div>
-                            {% endif %}
-                        </section>
-
-                        <section class="opn-card">
-                            <h5 class="opn-section-title">Players</h5>
-                            {% if stream.player %}
-                            <ul class="list-group list-group-flush">
-                                {% for player in stream.player %}
-                                <li class="list-group-item opn-player-item d-flex flex-column">
-                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                        <strong>
-                                        <span class="blur-text" tabindex="0" role="button"
-                                              data-url="{{ player.key }}" onclick="copyToClipboard(this)"
-                                              onkeyup="if(event.key==='Enter') copyToClipboard(this)">{{ player.key }}</span>
-                                        <span class="copy-feedback"></span>
-                                        </strong>
-                                        <form method="post" action="{% url 'streams:delete_player' player.key %}" class="stream-action-form">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                                        </form>
+                            <section class="opn-card" data-push-status-card data-publisher="{{ stream.publisher }}">
+                                <h5 class="opn-section-title">Push Control</h5>
+                                <form method="post" action="{% url 'streams:update_push_route' stream.publisher %}" class="stream-action-form" data-push-publisher="{{ stream.publisher }}">
+                                    {% csrf_token %}
+                                    <label for="push-destination-{{ stream.publisher }}" class="form-label">Push destination URL</label>
+                                    <input id="push-destination-{{ stream.publisher }}" type="text" class="form-control" name="destination_url" value="{{ stream.push.destination_url }}" placeholder="srt://... or rtmp(s)://...">
+                                    <div class="mt-3 d-flex gap-2 align-items-center flex-wrap">
+                                        <button type="submit" name="action" value="save" class="btn btn-outline-light btn-sm">Save destination</button>
+                                        <button type="submit" name="action" value="toggle" class="btn btn-sm {% if stream.push.enabled %}btn-warning{% else %}btn-opn-primary{% endif %}" data-push-toggle-btn>
+                                            {% if stream.push.enabled %}Disable push{% else %}Enable push{% endif %}
+                                        </button>
+                                        <span class="badge text-bg-{{ stream.push.runner_badge }}" data-push-runner-badge>Runner: {{ stream.push.runner_state }}</span>
                                     </div>
-                                    <div class="mt-2">
-                                        {% if player.description %}
-                                        <strong>Description:</strong> <span class="opn-muted">{{ player.description }}</span><br>
-                                        {% endif %}
-                                        <strong>Player URL:</strong>
-                                        <span class="blur-text" tabindex="0" role="button"
-                                              data-url="srt://{{ sls_domain_ip }}:{{ srt_player_port }}?streamid={{ player.key }}"
-                                              onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">srt://{{ sls_domain_ip }}:{{ srt_player_port }}?streamid={{ player.key }}</span>
-                                        <span class="copy-feedback"></span><br>
-                                        <strong>Consumer Stats URL:</strong>
-                                        <span class="blur-text" tabindex="0" role="button"
-                                              data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/consumers/{{ player.key }}"
-                                              onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/consumers/{{ player.key }}</span>
-                                        <span class="copy-feedback"></span>
-                                    </div>
-                                    <div class="mt-2">
-                                        <h6 class="mb-1">Consumers</h6>
-                                        <div data-player-consumers data-player-key="{{ player.key }}">
-                                            <p class="opn-muted"><em>Expand this stream to inspect connected consumers.</em></p>
+                                </form>
+                                <div class="row g-2 mt-2">
+                                    <div class="col-md-4 col-6"><p>Enabled:</p><strong data-push-enabled>{% if stream.push.enabled %}Yes{% else %}No{% endif %}</strong></div>
+                                    <div class="col-md-4 col-6"><p>Source Key:</p><strong data-push-source-key>{{ stream.push.source_player_key|default:'-' }}</strong></div>
+                                    <div class="col-md-4 col-12"><p>Last Update:</p><strong data-push-updated>{% if stream.push.runner_updated_at %}{{ stream.push.runner_updated_at }}{% else %}-{% endif %}</strong></div>
+                                    <div class="col-md-6 col-6"><p>Source Ingest:</p><strong data-push-source-bitrate>0 kbps</strong></div>
+                                    <div class="col-md-6 col-6"><p>Relay Output:</p><strong data-push-relay-bitrate>{{ stream.push.relay_bitrate_kbps|default:0 }} kbps</strong></div>
+                                    <div class="col-md-4 col-6"><p>Relay Uptime:</p><strong data-push-relay-uptime>{{ stream.push.relay_uptime_seconds|default:0 }}s</strong></div>
+                                    <div class="col-md-4 col-6"><p>Retry In:</p><strong data-push-retry>{{ stream.push.retry_in_seconds|default:0 }}s</strong></div>
+                                    <div class="col-md-4 col-12"><p>Last Exit:</p><strong data-push-exit>{% if stream.push.last_exit_code or stream.push.last_exit_code == 0 %}{{ stream.push.last_exit_code }}{% else %}-{% endif %}</strong></div>
+                                    <div class="col-12"><p>Destination:</p><strong data-push-destination>{{ stream.push.destination_url|default:'-' }}</strong></div>
+                                </div>
+                                <div class="alert mt-2 mb-0 py-1 px-2 {% if stream.push.runner_state == 'error' or stream.push.runner_state == 'retrying' %}alert-danger{% elif stream.push.runner_state == 'running' %}alert-success{% else %}alert-secondary{% endif %}" data-push-last-error>
+                                    {{ stream.push.last_error|default:'status unavailable' }}
+                                </div>
+                            </section>
+
+                            <section class="opn-card">
+                                <h5 class="opn-section-title">Companion Remote Control</h5>
+                                <p class="opn-muted mb-2">Active tokens: {{ stream.push.token_count }} (stream-scoped)</p>
+                                <form method="post" action="{% url 'streams:create_control_token' stream.publisher %}" class="mb-2 d-flex gap-2 align-items-center flex-wrap stream-action-form">
+                                    {% csrf_token %}
+                                    <input type="text" class="form-control form-control-sm" style="max-width: 260px" name="token_label" placeholder="Token label (optional)">
+                                    <button type="submit" class="btn btn-sm btn-outline-info">Create control token</button>
+                                </form>
+                                <form method="post" action="{% url 'streams:revoke_control_tokens' stream.publisher %}" class="stream-action-form">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Revoke all tokens</button>
+                                </form>
+
+                                {% if stream.push.new_control_token %}
+                                <div class="alert alert-warning py-2 px-2 mt-3 mb-2">
+                                    <strong>New control token (shown once):</strong>
+                                    <code>{{ stream.push.new_control_token }}</code>
+                                </div>
+                                <div class="small mb-3">
+                                    <div><strong>Enable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/enable</code></div>
+                                    <div><strong>Disable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/disable</code></div>
+                                    <div><strong>Status URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/status</code></div>
+                                    <div><strong>Header:</strong> <code>Authorization: Bearer {{ stream.push.new_control_token }}</code></div>
+                                    <div><strong>Browser Enable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/enable?token={{ stream.push.new_control_token }}</code></div>
+                                    <div><strong>Browser Disable URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/disable?token={{ stream.push.new_control_token }}</code></div>
+                                    <div><strong>Browser Status URL:</strong> <code>{{ base_url }}/api/push/control/{{ stream.publisher }}/status?token={{ stream.push.new_control_token }}</code></div>
+                                </div>
+                                <div class="alert alert-secondary py-2 px-2 mb-0">
+                                    Query-string token links are convenient but less secure than Bearer headers. Use header auth where possible.
+                                </div>
+                                {% endif %}
+                            </section>
+
+                            <section class="opn-card">
+                                <h5 class="opn-section-title">Players</h5>
+                                {% if stream.player %}
+                                <ul class="list-group list-group-flush">
+                                    {% for player in stream.player %}
+                                    <li class="list-group-item opn-player-item d-flex flex-column">
+                                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                            <strong>
+                                            <span class="blur-text" tabindex="0" role="button" data-url="{{ player.key }}" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">{{ player.key }}</span>
+                                            <span class="copy-feedback"></span>
+                                            </strong>
+                                            <form method="post" action="{% url 'streams:delete_player' player.key %}" class="stream-action-form">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                            </form>
                                         </div>
-                                    </div>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                            {% else %}
-                            <p class="opn-muted"><em>No players found</em></p>
-                            {% endif %}
+                                        <div class="mt-2">
+                                            {% if player.description %}
+                                            <strong>Description:</strong> <span class="opn-muted">{{ player.description }}</span><br>
+                                            {% endif %}
+                                            <strong>Player URL:</strong>
+                                            <span class="blur-text" tabindex="0" role="button" data-url="srt://{{ sls_domain_ip }}:{{ srt_player_port }}?streamid={{ player.key }}" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">srt://{{ sls_domain_ip }}:{{ srt_player_port }}?streamid={{ player.key }}</span>
+                                            <span class="copy-feedback"></span><br>
+                                            <strong>Consumer Stats URL:</strong>
+                                            <span class="blur-text" tabindex="0" role="button" data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/consumers/{{ player.key }}" onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/consumers/{{ player.key }}</span>
+                                            <span class="copy-feedback"></span>
+                                        </div>
+                                        <div class="mt-2">
+                                            <h6 class="mb-1">Consumers</h6>
+                                            <div data-player-consumers data-player-key="{{ player.key }}">
+                                                <p class="opn-muted"><em>Expand this stream to inspect connected consumers.</em></p>
+                                            </div>
+                                        </div>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p class="opn-muted"><em>No players found</em></p>
+                                {% endif %}
 
-                            <div class="d-flex gap-2 flex-wrap mt-3">
-                                <form method="post" action="{% url 'streams:delete_stream' stream.publisher %}" class="stream-action-form">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-danger">Delete Stream</button>
-                                </form>
-                                <form method="post" action="{% url 'streams:add_player' %}" class="stream-action-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="publisher_key" value="{{ stream.publisher }}">
-                                    <button type="submit" class="btn btn-opn-primary">Add Player</button>
-                                </form>
-                            </div>
-                        </section>
+                                <div class="d-flex gap-2 flex-wrap mt-3">
+                                    <form method="post" action="{% url 'streams:delete_stream' stream.publisher %}" class="stream-action-form">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger">Delete Stream</button>
+                                    </form>
+                                    <form method="post" action="{% url 'streams:add_player' %}" class="stream-action-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="publisher_key" value="{{ stream.publisher }}">
+                                        <button type="submit" class="btn btn-opn-primary">Add Player</button>
+                                    </form>
+                                </div>
+                            </section>
+                        </div>
                     </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
     </section>
     {% endfor %}
