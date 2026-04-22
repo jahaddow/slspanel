@@ -208,6 +208,7 @@ def ensure_hidden_push_source(route, entries=None):
     if entries is None:
         entries = get_stream_entries()
 
+    had_existing_source = bool(route.source_player_key.strip()) if route.source_player_key else False
     source_key = route.source_player_key.strip() if route.source_player_key else ""
     if not source_key:
         source_key = build_hidden_push_player_key(route.publisher)
@@ -242,6 +243,10 @@ def ensure_hidden_push_source(route, entries=None):
             route.source_player_key = source_key
             route.save(update_fields=["source_player_key", "updated_at"])
             return source_key, entries
+
+    if had_existing_source:
+        # Keep previously-known source key when transient API checks fail.
+        return source_key, entries
 
     return "", entries
 
@@ -660,9 +665,8 @@ def internal_push_routes(request):
     for route in PushRoute.objects.all():
         source_key, entries = ensure_hidden_push_source(route, entries)
         if route.enabled and not source_key:
-            route.enabled = False
-            route.last_error = "internal push source key is missing"
-            route.save(update_fields=["enabled", "last_error", "updated_at"])
+            route.last_error = "internal push source key is currently unavailable (auto-retrying)"
+            route.save(update_fields=["last_error", "updated_at"])
         routes.append({
             'publisher': route.publisher,
             'player': source_key,
