@@ -210,20 +210,22 @@ body.opn-app {
 }
 
 .blur-text {
-    filter: blur(4px);
+    filter: none;
     cursor: pointer;
-    transition: filter 0.2s ease;
+    transition: background-color 0.2s ease;
     -webkit-user-select: none;
     user-select: none;
     padding: 2px 4px;
     border-radius: 4px;
     display: inline-block;
     background: rgba(255, 255, 255, 0.06);
+    color: var(--opn-text);
+    word-break: break-all;
 }
 
 .blur-text:focus,
 .blur-text:hover {
-    filter: none;
+    background: rgba(255, 255, 255, 0.14);
     outline: none;
 }
 

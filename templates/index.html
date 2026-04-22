@@ -56,6 +56,25 @@
                               onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">srtla://{{ sls_domain_ip }}:{{ srtla_publish_port }}?streamid={{ stream.publisher }}</span>
                         <span class="copy-feedback"></span>
                     </div>
+                    {% if stream.main_player %}
+                    <div class="opn-url-row">
+                        <strong>Primary Stats</strong>
+                        <span class="blur-text" tabindex="0" role="button"
+                              data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ stream.main_player }}"
+                              onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ stream.main_player }}</span>
+                        <span class="copy-feedback"></span>
+                    </div>
+                    <div class="opn-url-row">
+                        <strong>Primary Legacy</strong>
+                        <span class="blur-text" tabindex="0" role="button"
+                              data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ stream.main_player }}?legacy=1"
+                              onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ stream.main_player }}?legacy=1</span>
+                        <span class="copy-feedback"></span>
+                    </div>
+                    <div class="mt-2">
+                        <a class="btn btn-sm btn-outline-info" href="{% url 'streams:player_stats_page' stream.main_player %}">Open Live Stats Page</a>
+                    </div>
+                    {% endif %}
                 </section>
 
                 <section class="opn-card">
@@ -147,6 +166,8 @@
                                       data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ player.key }}?legacy=1"
                                       onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ player.key }}?legacy=1</span>
                                 <span class="copy-feedback"></span>
+                                <br>
+                                <a class="btn btn-sm btn-outline-info mt-2" href="{% url 'streams:player_stats_page' player.key %}">Open Live Stats Page</a>
                             </div>
                             <div id="stats-{{ player.key }}" data-player-key="{{ player.key }}">
                                 <p class="opn-muted"><em>Expand this stream to load live stats.</em></p>
