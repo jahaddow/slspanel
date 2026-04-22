@@ -6,9 +6,12 @@ function generateKey(prefix, bytes) {
 
 const ACTIVE_STREAM_KEY = 'slspanel.activeStreamPublisher';
 const GROUP_COLLAPSE_KEY = 'slspanel.collapsedGroups';
+const PENDING_SCROLL_Y_KEY = 'slspanel.pendingScrollY';
+const PENDING_SCROLL_TS_KEY = 'slspanel.pendingScrollTs';
 const PUSH_STATUS_POLL_MS = 2000;
 const STATS_POLL_MS = 2000;
 const LAYOUT_SAVE_DEBOUNCE_MS = 400;
+const SCROLL_RESTORE_MAX_AGE_MS = 60000;
 
 function getPublisherSelectorValue(publisher) {
     if (window.CSS && typeof window.CSS.escape === 'function') {
@@ -270,6 +273,44 @@ function setTextIfChanged(element, value) {
     }
 }
 
+function setPushDetailsVisibility(statusCard, enabled) {
+    const details = statusCard.querySelector('[data-push-details]');
+    if (!details) {
+        return;
+    }
+    details.classList.toggle('d-none', !enabled);
+}
+
+function capturePendingScrollState() {
+    localStorage.setItem(PENDING_SCROLL_Y_KEY, String(Math.max(0, Math.round(window.scrollY || 0))));
+    localStorage.setItem(PENDING_SCROLL_TS_KEY, String(Date.now()));
+}
+
+function restorePendingScrollState() {
+    const rawY = localStorage.getItem(PENDING_SCROLL_Y_KEY);
+    const rawTs = localStorage.getItem(PENDING_SCROLL_TS_KEY);
+    if (!rawY || !rawTs) {
+        return;
+    }
+
+    const y = Number(rawY);
+    const ts = Number(rawTs);
+    const ageMs = Date.now() - ts;
+
+    localStorage.removeItem(PENDING_SCROLL_Y_KEY);
+    localStorage.removeItem(PENDING_SCROLL_TS_KEY);
+
+    if (!Number.isFinite(y) || !Number.isFinite(ts) || ageMs < 0 || ageMs > SCROLL_RESTORE_MAX_AGE_MS) {
+        return;
+    }
+
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            window.scrollTo(0, y);
+        }, 0);
+    });
+}
+
 function extractConsumerConnections(data) {
     const found = [];
     let sawConsumerContainer = false;
@@ -463,6 +504,7 @@ function updatePushRouteCard(route) {
     updatePushSummaryMessage(statusCard, route);
     updatePushToggleButton(form, route);
     updatePushCardMetrics(statusCard, route);
+    setPushDetailsVisibility(statusCard, !!route.enabled);
 }
 
 function updatePushSourceBitrate(collapseEl, payload) {
@@ -681,6 +723,7 @@ function initializeAccordionState() {
 
     document.querySelectorAll('form.stream-action-form').forEach(form => {
         form.addEventListener('submit', function () {
+            capturePendingScrollState();
             const collapse = form.closest('.accordion-collapse[data-stream-publisher]');
             if (!collapse) {
                 return;
@@ -894,6 +937,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     initializeGroupCollapseState();
     initializeAccordionState();
+    restorePendingScrollState();
     initializeStats();
     initializePushStatusPolling();
     initializeStreamLayoutDnD();
