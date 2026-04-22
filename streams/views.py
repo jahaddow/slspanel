@@ -303,15 +303,27 @@ def api_push_routes_status(request):
 
 
 @conditional_login_required
-def sls_stats(request, player_key):
+def sls_publisher_stats(request, publisher_key):
     try:
-        url = f"http://{settings.SLS_STATS_DOMAIN_IP}:{settings.SLS_STATS_PORT}/stats/{player_key}"
+        url = f"http://{settings.SLS_STATS_DOMAIN_IP}:{settings.SLS_STATS_PORT}/stats/publisher/{publisher_key}"
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         data = response.json()
         return JsonResponse(data)
     except Exception:
-        return JsonResponse({"error": "Failed to fetch stats", "status": "error"}, status=500)
+        return JsonResponse({"error": "Failed to fetch publisher stats", "status": "error"}, status=500)
+
+
+@conditional_login_required
+def sls_consumer_stats(request, player_key):
+    try:
+        url = f"http://{settings.SLS_STATS_DOMAIN_IP}:{settings.SLS_STATS_PORT}/stats/consumers/{player_key}"
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return JsonResponse(data)
+    except Exception:
+        return JsonResponse({"error": "Failed to fetch consumer stats", "status": "error"}, status=500)
 
 
 @conditional_login_required

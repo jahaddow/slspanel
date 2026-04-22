@@ -321,18 +321,32 @@ function renderConsumerList(container, payload) {
         return;
     }
 
-    const extracted = extractConsumerConnections(payload);
-    const connections = extracted.connections;
+    let connections = [];
+    let extracted = null;
+    if (Array.isArray(payload.consumers)) {
+        connections = payload.consumers.map((raw, idx) => normalizeConsumerConnection(raw, idx));
+    } else {
+        extracted = extractConsumerConnections(payload);
+        connections = extracted.connections;
+    }
 
     if (connections.length === 0) {
-        if (extracted.sawConsumerContainer) {
-            if (typeof extracted.hintedCount === 'number' && extracted.hintedCount > 0) {
+        if (typeof payload.consumer_count === 'number') {
+            if (payload.consumer_count > 0) {
                 container.innerHTML = '<p class="opn-muted"><em>Consumer count is reported, but per-connection details are unavailable in this payload.</em></p>';
             } else {
                 container.innerHTML = '<p class="opn-muted"><em>No consumers currently connected.</em></p>';
             }
         } else {
-            container.innerHTML = '<p class="opn-muted"><em>This SLS stats response only contains publisher metrics for this stream (no consumer connection list).</em></p>';
+            if (extracted && extracted.sawConsumerContainer) {
+                if (typeof extracted.hintedCount === 'number' && extracted.hintedCount > 0) {
+                    container.innerHTML = '<p class="opn-muted"><em>Consumer count is reported, but per-connection details are unavailable in this payload.</em></p>';
+                } else {
+                    container.innerHTML = '<p class="opn-muted"><em>No consumers currently connected.</em></p>';
+                }
+            } else {
+                container.innerHTML = '<p class="opn-muted"><em>This stats response does not include consumer connection details.</em></p>';
+            }
         }
         return;
     }
@@ -373,8 +387,19 @@ function renderConsumerList(container, payload) {
     `;
 }
 
-function fetchStatsForPlayer(playerKey) {
-    return fetch(`/sls-stats/${encodeURIComponent(playerKey)}/`)
+function fetchPublisherStats(publisherKey) {
+    return fetch(`/sls-stats/publisher/${encodeURIComponent(publisherKey)}/`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .catch(() => ({ error: true }));
+}
+
+function fetchConsumerStats(playerKey) {
+    return fetch(`/sls-stats/consumers/${encodeURIComponent(playerKey)}/`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -387,27 +412,37 @@ function fetchStatsForPlayer(playerKey) {
 function updateStatsForCollapse(collapseEl) {
     const playerContainers = Array.from(collapseEl.querySelectorAll('[data-player-consumers][data-player-key]'));
     const playerKeys = Array.from(new Set(playerContainers.map(el => el.dataset.playerKey).filter(Boolean)));
-    const mainPlayer = collapseEl.dataset.mainPlayer || '';
-    if (mainPlayer) {
-        playerKeys.unshift(mainPlayer);
-    }
-    const uniqueKeys = Array.from(new Set(playerKeys));
-    if (uniqueKeys.length === 0) {
+    const streamPublisher = collapseEl.dataset.streamPublisher || '';
+    if (!streamPublisher && playerKeys.length === 0) {
         return;
     }
 
-    Promise.all(uniqueKeys.map(key => fetchStatsForPlayer(key).then(payload => ({ key, payload }))))
-        .then(results => {
-            const map = new Map(results.map(item => [item.key, item.payload]));
+    const tasks = [];
+    if (streamPublisher) {
+        tasks.push(fetchPublisherStats(streamPublisher).then(payload => ({ type: 'publisher', payload })));
+    }
+    playerKeys.forEach(key => {
+        tasks.push(fetchConsumerStats(key).then(payload => ({ type: 'consumer', key, payload })));
+    });
 
-            const streamPayload = mainPlayer ? map.get(mainPlayer) : map.get(uniqueKeys[0]);
-            renderStreamStatsCard(collapseEl, streamPayload);
+    Promise.all(tasks).then(results => {
+        const consumerMap = new Map();
+        let publisherPayload = null;
 
-            playerContainers.forEach(container => {
-                const key = container.dataset.playerKey;
-                renderConsumerList(container, map.get(key));
-            });
+        results.forEach(item => {
+            if (item.type === 'publisher') {
+                publisherPayload = item.payload;
+            } else if (item.type === 'consumer') {
+                consumerMap.set(item.key, item.payload);
+            }
         });
+
+        renderStreamStatsCard(collapseEl, publisherPayload);
+        playerContainers.forEach(container => {
+            const key = container.dataset.playerKey;
+            renderConsumerList(container, consumerMap.get(key));
+        });
+    });
 }
 
 function visibleStatCollapses() {

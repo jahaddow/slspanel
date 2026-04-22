@@ -60,15 +60,15 @@
                     <div class="opn-url-row">
                         <strong>Primary Stats</strong>
                         <span class="blur-text" tabindex="0" role="button"
-                              data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ stream.main_player }}"
-                              onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ stream.main_player }}</span>
+                              data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}"
+                              onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}</span>
                         <span class="copy-feedback"></span>
                     </div>
                     <div class="opn-url-row">
                         <strong>Primary Legacy</strong>
                         <span class="blur-text" tabindex="0" role="button"
-                              data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ stream.main_player }}?legacy=1"
-                              onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ stream.main_player }}?legacy=1</span>
+                              data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}?legacy=1"
+                              onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/publisher/{{ stream.publisher }}?legacy=1</span>
                         <span class="copy-feedback"></span>
                     </div>
                     {% endif %}
@@ -160,15 +160,10 @@
                                       data-url="srt://{{ sls_domain_ip }}:{{ srt_player_port }}?streamid={{ player.key }}"
                                       onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">srt://{{ sls_domain_ip }}:{{ srt_player_port }}?streamid={{ player.key }}</span>
                                 <span class="copy-feedback"></span><br>
-                                <strong>Stats URL:</strong>
+                                <strong>Consumer Stats URL:</strong>
                                 <span class="blur-text" tabindex="0" role="button"
-                                      data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ player.key }}"
-                                      onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ player.key }}</span>
-                                <span class="copy-feedback"></span><br>
-                                <strong>Stats Legacy URL:</strong>
-                                <span class="blur-text" tabindex="0" role="button"
-                                      data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ player.key }}?legacy=1"
-                                      onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/{{ player.key }}?legacy=1</span>
+                                      data-url="http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/consumers/{{ player.key }}"
+                                      onclick="copyToClipboard(this)" onkeyup="if(event.key==='Enter') copyToClipboard(this)">http://{{ sls_domain_ip }}:{{ sls_stats_port }}/stats/consumers/{{ player.key }}</span>
                                 <span class="copy-feedback"></span>
                             </div>
                             <div class="mt-2">

@@ -10,6 +10,7 @@ A web-based control panel for SLS live streaming servers.
 - Stream management
 - Player and URL management
 - Real-time statistics viewer
+- Stream-level publisher stats (`/stats/publisher/{publisher_key}`) and per-player consumer stats (`/stats/consumers/{player_key}`)
 - OPN-branded login and dashboard UI
 - Supports both single-publisher and multi-publisher SLS stats payloads
 - Per-stream push configuration and toggle (`srt://`, `rtmp://`, `rtmps://`)
